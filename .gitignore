@@ -1,0 +1,23 @@
+# Local files and generated artifacts
+.DS_Store
+__pycache__/
+*.py[cod]
+dist/
+work/
+outputs/
+*.app/
+*.zip
+.venv/
+
+# Relay recovery records and account-specific state stay on the local Mac
+.state/
+relay-state/
+state.json
+hosts-before-*
+*.log
+*.sock
+*.pem
+.env
+.env.*
+.codex/
+.playwright-cli/
