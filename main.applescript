@@ -17,6 +17,7 @@ property busy : false
 property relayRunning : false
 property resourcesDir : ""
 property pythonPath : "__CLOUDLINK_PYTHON__"
+property bundledPython : __CLOUDLINK_BUNDLED__
 property preferredState : ""
 property legacyState : "__CLOUDLINK_LEGACY_STATE__"
 property activeState : ""
@@ -27,6 +28,7 @@ on run
     set relayRunning to false
     set resourcesDir to POSIX path of (path to resource "relay.py")
     set resourcesDir to do shell script "/usr/bin/dirname " & quoted form of resourcesDir
+    if bundledPython then set pythonPath to resourcesDir & "/python/bin/python3"
     set preferredState to (POSIX path of (path to application support folder from user domain)) & "云连接助手/relay-state"
     set activeState to preferredState
     my makeWindow()
@@ -110,7 +112,7 @@ on showReport(titleText, messageText)
 end showReport
 
 on relayCommand(actionName, stateDir)
-    return quoted form of pythonPath & " " & quoted form of (resourcesDir & "/relay.py") & " " & actionName & " --state-dir " & quoted form of stateDir
+    return quoted form of pythonPath & " -B " & quoted form of (resourcesDir & "/relay.py") & " " & actionName & " --state-dir " & quoted form of stateDir
 end relayCommand
 
 on refreshState()
@@ -143,7 +145,7 @@ on refreshState()
         startButton's setEnabled:(not relayRunning)
         stopButton's setEnabled:relayRunning
         restoreButton's setEnabled:(not relayRunning)
-        set antiInfo to do shell script quoted form of pythonPath & " " & quoted form of (resourcesDir & "/antigravity_helper.py") & " info"
+        set antiInfo to do shell script quoted form of pythonPath & " -B " & quoted form of (resourcesDir & "/antigravity_helper.py") & " info"
         antiLabel's setStringValue:antiInfo
     on error errorText
         statusLabel's setStringValue:"状态不可用"
@@ -205,7 +207,7 @@ end refreshClicked:
 
 on openAntigravity:sender
     try
-        set messageText to do shell script quoted form of pythonPath & " " & quoted form of (resourcesDir & "/antigravity_helper.py") & " open"
+        set messageText to do shell script quoted form of pythonPath & " -B " & quoted form of (resourcesDir & "/antigravity_helper.py") & " open"
         my showReport("Antigravity 登录与授权", messageText)
     on error errorText
         my showReport("无法打开 Antigravity", errorText)
@@ -216,7 +218,7 @@ on checkAntigravity:sender
     my showReport("授权网络检查", "正在通过系统代理检查，请稍候…")
     my beginAction("检查网络…")
     try
-        set messageText to do shell script quoted form of pythonPath & " " & quoted form of (resourcesDir & "/antigravity_helper.py") & " check"
+        set messageText to do shell script quoted form of pythonPath & " -B " & quoted form of (resourcesDir & "/antigravity_helper.py") & " check"
         my showReport("授权网络检查", messageText)
     on error errorText
         my showReport("检查未完成", errorText)

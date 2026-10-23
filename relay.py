@@ -443,7 +443,7 @@ def supervisor(listener, proxy, operator_uid, operator_gid, feedback_fd, lock_fd
 
 
 def internal_command(mode, payload):
-    return [sys.executable, str(Path(__file__).resolve()), mode, json.dumps({**payload, "state_dir": str(STATE)}, separators=(",", ":"))]
+    return [sys.executable, '-B', str(Path(__file__).resolve()), mode, json.dumps({**payload, "state_dir": str(STATE)}, separators=(",", ":"))]
 
 
 def start(proxy_bypass_service=None):
