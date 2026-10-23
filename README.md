@@ -74,6 +74,26 @@ python3 build.py --legacy-state /absolute/path/to/existing/.state
 
 Antigravity 的 Google 登录、账号选择和授权在官方应用及浏览器完成。助手不读取或保存登录令牌。匿名 TLS 检查通过只代表网络连通，不代表登录成功、账号地区符合条件或模型可用。地区申请及账号受理也由 Google 处理。
 
+## Codex 本地聊天与云端兼容
+
+本地聊天遇到 `Broken pipe` 或反复重连时，可使用仓库中的 [通过系统代理启动Codex.command](通过系统代理启动Codex.command)。它读取当前回环地址上的系统 HTTPS 代理，为新启动的 Codex 客户端传入进程级代理环境。
+
+使用前，确认用户级 `~/.codex/config.toml` 的默认 `model_provider` 为官方 `"openai"`（也可不写该项）。当前排查的桌面版本会在全局默认提供商改为自定义 HTTP/SSE 提供商时隐藏云端入口，即使自定义提供商仍使用官方接口。脚本不自动修改配置文件。
+
+1. 开启系统代理，需要云聊天时同时保持云连接助手中继运行。
+2. 等正在运行的任务完成，按 `⌘Q` 完整退出 Codex 主客户端。
+3. 双击启动脚本，再分别检查本地连续回复、原云聊天读取及新建聊天的云端入口。
+
+脚本当前查找 `/Applications/ChatGPT.app`；如果客户端安装在其他位置，先调整脚本中的 `app_target`。仅做配置检查可运行：
+
+```sh
+zsh ./通过系统代理启动Codex.command --check
+```
+
+脚本保留现有直连范围，并合并系统代理例外，使 `codex-cloud-backend.chatgpt.com` 继续进入单域名中继。它不强制退出客户端、不改 hosts 或系统代理、不设置全局 `launchctl` 环境。代理变量只在本次启动中传入，之后直接从 Dock 启动不保证沿用这些变量。该脚本目前随源码提供，已发布的 v1.0.0 App ZIP 不包含此新增入口。
+
+2026-10-23 的受控测试中，官方默认提供商加显式代理环境完成了 5 次真实回复，其中一次在空闲 45 秒后继续；未显式传入代理的对照测试出现重连。客户端重启后已核对本地后台带有代理环境，原云聊天读取成功，短时客户端日志未发现同类 `Broken pipe`。这些结果不代表已验证长期使用、休眠唤醒或所有网络条件下都稳定，新建云端入口仍需在界面中确认。
+
 ## 验证
 
 ```sh
@@ -89,6 +109,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s . -p 'test_*.py' -q
 - `main.applescript`：原生窗口、状态与启停入口；解释器和可选旧状态路径由构建时填入。
 - `relay.py`：固定域名的 CONNECT 中继与设置恢复。
 - `antigravity_helper.py`：官方应用入口、进程代理及匿名 TLS 检查。
+- `通过系统代理启动Codex.command`：以现有系统代理启动 Codex 的可选入口，保留系统代理例外。
 - `build.py`：编译、临时签名和打包。
 - `THIRD_PARTY_NOTICES.md`：随包 Python 的来源与许可证位置。
 - `test_relay.py`、`test_antigravity.py`：隔离测试。
