@@ -46,22 +46,26 @@ with tempfile.TemporaryDirectory(prefix='cloudlink-build-', dir='/private/tmp') 
     script_path.write_text(script)
     subprocess.run(['/usr/bin/osacompile', '-s', '-o', str(app), str(script_path)], check=True)
     resources = app / 'Contents/Resources'
-    for resource in ['relay.py', 'antigravity_helper.py', 'THIRD_PARTY_NOTICES.md']:
+    for resource in ['relay.py', 'antigravity_helper.py', 'autostart.py', 'THIRD_PARTY_NOTICES.md']:
         shutil.copyfile(SOURCE / resource, resources / resource)
     if bundled:
         shutil.copytree(bundled, resources / 'python', symlinks=True, ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
-    shutil.copyfile('/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/GenericNetworkIcon.icns', resources / 'appicon.icns')
+    for icon_name in ['appicon.icns', 'applet.icns']:
+        shutil.copyfile(SOURCE / 'assets/appicon.icns', resources / icon_name)
+    (resources / 'Assets.car').unlink(missing_ok=True)
     info_path = app / 'Contents/Info.plist'
     info = plistlib.loads(info_path.read_bytes())
+    # osacompile's template catalog name overrides a custom ICNS file.
+    info.pop('CFBundleIconName', None)
     info.update(CFBundleIdentifier='local.hive.cloudlinkassistant', CFBundleDisplayName='云连接助手',
-                CFBundleName='云连接助手', CFBundleShortVersionString='1.0.0', CFBundleVersion='3',
+                CFBundleName='云连接助手', CFBundleShortVersionString='1.1.0', CFBundleVersion='7',
                 CFBundleIconFile='appicon.icns', NSHighResolutionCapable=True, OSAAppletStayOpen=True)
     info_path.write_bytes(plistlib.dumps(info))
     for attr in ['com.apple.FinderInfo', 'com.apple.ResourceFork']:
         subprocess.run(['/usr/bin/xattr', '-dr', attr, str(app)], capture_output=True)
     subprocess.run(['/usr/bin/codesign', '--force', '--deep', '--sign', '-', str(app)], check=True)
     subprocess.run(['/usr/bin/codesign', '--verify', '--deep', '--strict', str(app)], check=True)
-    shutil.copytree(app, destination)
+    shutil.copytree(app, destination, symlinks=True)
     subprocess.run(['/usr/bin/ditto', '-c', '-k', '--norsrc', '--keepParent', str(app), str(archive)], check=True)
     print(destination)
     print(archive)

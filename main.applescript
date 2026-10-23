@@ -10,6 +10,8 @@ property antiLabel : missing value
 property startButton : missing value
 property stopButton : missing value
 property restoreButton : missing value
+property enableStartupItem : missing value
+property disableStartupItem : missing value
 property reportLabel : missing value
 property quitPanel : missing value
 property allowQuit : false
@@ -32,10 +34,55 @@ on run
     set preferredState to (POSIX path of (path to application support folder from user domain)) & "云连接助手/relay-state"
     set activeState to preferredState
     my makeWindow()
+    my makeStartupMenu()
     my refreshState()
     mainWindow's makeKeyAndOrderFront:me
     current application's NSApp's activateIgnoringOtherApps:true
 end run
+
+on makeStartupMenu()
+    set applicationMenu to (current application's NSApp's mainMenu()'s itemAtIndex:0)'s submenu()
+    applicationMenu's setAutoenablesItems:false
+    set enableStartupItem to current application's NSMenuItem's alloc()'s initWithTitle:"开启开机自动启动…" action:"enableStartup:" keyEquivalent:""
+    enableStartupItem's setTarget:me
+    applicationMenu's insertItem:enableStartupItem atIndex:2
+    set disableStartupItem to current application's NSMenuItem's alloc()'s initWithTitle:"关闭开机自动启动…" action:"disableStartup:" keyEquivalent:""
+    disableStartupItem's setTarget:me
+    applicationMenu's insertItem:disableStartupItem atIndex:3
+    applicationMenu's insertItem:(current application's NSMenuItem's separatorItem()) atIndex:4
+end makeStartupMenu
+
+on changeStartup(actionName)
+    if busy then return
+    my beginAction("正在设置开机启动…")
+    try
+        set operatorUID to do shell script "/usr/bin/id -u"
+        set operatorGID to do shell script "/usr/bin/id -g"
+        set commandText to "/usr/bin/env SUDO_UID=" & quoted form of operatorUID & " SUDO_GID=" & quoted form of operatorGID & " " & quoted form of pythonPath & " -I -B " & quoted form of (resourcesDir & "/autostart.py") & " " & quoted form of actionName
+        if actionName is "install" then
+            set applicationPath to current application's NSBundle's mainBundle()'s bundlePath() as text
+            set commandText to commandText & " --app " & quoted form of applicationPath
+        end if
+        do shell script commandText with administrator privileges
+        if actionName is "install" then
+            my showReport("开机自动启动已开启", "以后开机登录后会打开助手，中继会等待现有系统代理就绪后自动启动。仍可用“停止”暂停本次使用。")
+        else
+            my showReport("开机自动启动已关闭", "启动项已关闭，中继已停止并恢复网络设置。以后仍可在此手动启动。")
+        end if
+    on error errorText number errorNumber
+        if errorNumber is not -128 then my showReport("开机启动设置未完成", errorText)
+    end try
+    set busy to false
+    my refreshState()
+end changeStartup
+
+on enableStartup:sender
+    my changeStartup("install")
+end enableStartup:
+
+on disableStartup:sender
+    my changeStartup("disable")
+end disableStartup:
 
 on makeLabel(theText, fontSize, x, y, w, h, boldText)
     set field to current application's NSTextField's labelWithString:theText
@@ -147,6 +194,9 @@ on refreshState()
         restoreButton's setEnabled:(not relayRunning)
         set antiInfo to do shell script quoted form of pythonPath & " -B " & quoted form of (resourcesDir & "/antigravity_helper.py") & " info"
         antiLabel's setStringValue:antiInfo
+        set startupInstalled to (do shell script "if /bin/test -f /Library/LaunchDaemons/local.hive.cloudlinkassistant.autorelay.plist; then /usr/bin/printf yes; else /usr/bin/printf no; fi") is "yes"
+        enableStartupItem's setEnabled:(not startupInstalled)
+        disableStartupItem's setEnabled:startupInstalled
     on error errorText
         statusLabel's setStringValue:"状态不可用"
         detailLabel's setStringValue:errorText
