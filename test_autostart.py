@@ -12,6 +12,48 @@ import autostart
 
 
 class AutostartTests(unittest.TestCase):
+    def bypass_fixture(self, added=True, phase='running'):
+        relay = mock.Mock()
+        relay.TARGET = 'codex-cloud-backend.chatgpt.com'
+        relay.read_state.return_value = {'phase': phase, 'proxy_bypass': {'service': 'Wi-Fi', 'added': added}}
+        relay.read_bypass.return_value = ['localhost', 'new-user-exception.example']
+        relay.control_request.return_value = {'running': True}
+        return relay
+
+    def test_repairs_overwritten_exception_preserving_current_user_entries(self):
+        relay = self.bypass_fixture()
+        self.assertTrue(autostart.repair_bypass(relay))
+        relay.set_bypass.assert_called_once_with('Wi-Fi', ['localhost', 'new-user-exception.example', relay.TARGET])
+
+    def test_does_not_duplicate_present_exception(self):
+        relay = self.bypass_fixture()
+        relay.read_bypass.return_value.append(relay.TARGET.upper())
+        self.assertFalse(autostart.repair_bypass(relay))
+        relay.set_bypass.assert_not_called()
+
+    def test_leaves_unowned_exception_and_stopped_relay_alone(self):
+        for relay in [self.bypass_fixture(added=False), self.bypass_fixture(phase='stopped')]:
+            self.assertFalse(autostart.repair_bypass(relay))
+            relay.read_bypass.assert_not_called()
+
+    def test_manual_stop_during_repair_restores_owned_exception(self):
+        relay = self.bypass_fixture()
+        relay.control_request.return_value = None
+        self.assertFalse(autostart.repair_bypass(relay))
+        relay.restore_bypass.assert_called_once_with({'service': 'Wi-Fi', 'added': True})
+
+    def test_monitor_continues_after_bypass_read_failure(self):
+        relay = self.bypass_fixture()
+        relay.control_request.side_effect = [{'running': True}, {'running': True}, None]
+        relay.read_bypass.side_effect = RuntimeError('settings temporarily unavailable')
+        relay.read_state.side_effect = [
+            {'phase': 'running', 'proxy_bypass': {'service': 'Wi-Fi', 'added': True}},
+            {'phase': 'stopped', 'worker_exit_code': 0},
+        ]
+        stopping = threading.Event()
+        with mock.patch.object(stopping, 'wait', return_value=False):
+            self.assertEqual(autostart.supervise(relay, 501, stopping), 0)
+
     @contextlib.contextmanager
     def installed_fixture(self):
         with tempfile.TemporaryDirectory() as directory:

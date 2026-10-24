@@ -58,7 +58,7 @@ with tempfile.TemporaryDirectory(prefix='cloudlink-build-', dir='/private/tmp') 
     # osacompile's template catalog name overrides a custom ICNS file.
     info.pop('CFBundleIconName', None)
     info.update(CFBundleIdentifier='local.hive.cloudlinkassistant', CFBundleDisplayName='云连接助手',
-                CFBundleName='云连接助手', CFBundleShortVersionString='1.1.0', CFBundleVersion='7',
+                CFBundleName='云连接助手', CFBundleShortVersionString='1.1.1', CFBundleVersion='8',
                 CFBundleIconFile='appicon.icns', NSHighResolutionCapable=True, OSAAppletStayOpen=True)
     info_path.write_bytes(plistlib.dumps(info))
     for attr in ['com.apple.FinderInfo', 'com.apple.ResourceFork']:

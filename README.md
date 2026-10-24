@@ -6,11 +6,16 @@ macOS 原生 AppKit 窗口，用现有系统代理连接 Codex 云服务，并�
 
 ## 下载 macOS App
 
-[下载 v1.1.0 Apple Silicon 版](https://github.com/xinxinzai98/cloud-link-assistant/releases/download/v1.1.0/cloud-link-assistant-v1.1.0-macos-arm64.zip) · [发布页与校验文件](https://github.com/xinxinzai98/cloud-link-assistant/releases/tag/v1.1.0)
+[下载 v1.1.1 Apple Silicon 版](https://github.com/xinxinzai98/cloud-link-assistant/releases/download/v1.1.1/cloud-link-assistant-v1.1.1-macos-arm64.zip) · [发布页与校验文件](https://github.com/xinxinzai98/cloud-link-assistant/releases/tag/v1.1.1)
 
 适用于 M 系列芯片 Mac。Releases 版内置 Python，无需另外安装 Homebrew 或 Python。解压 ZIP，将 App 拖入“应用程序”，开启已有系统代理后打开。Intel Mac 暂未提供经过验证的安装包。
 
-升级已有版本时，先在原入口停止旧中继并退出窗口，再替换原 App、从新版启动。若已开启自动启动，请保持原 App 路径和文件名，避免登录项指向旧副本。保留旧状态目录及其恢复备份，直到停止和恢复设置都已确认完成。为兼容已登记的登录项，App 文件名保留“云连接助手 1.0.app”；实际版本号在“关于”窗口显示为 1.1.0。
+升级已有版本时：
+
+1. 已开启自启的用户，先在旧版菜单选择“关闭开机自动启动…”，退出窗口后替换原 App，再在新版菜单重新开启。这样会同时更新系统中的守护程序副本，仅替换 App 不会更新正在运行的系统副本。操作期间云连接会短暂重连，恢复记录保留。
+2. 未开启自启的用户，先停止旧中继并退出窗口，再替换原 App、从新版启动。
+
+保持原 App 路径和文件名，并保留旧状态目录及其恢复备份，直到停止和恢复设置都已确认完成。为兼容已登记的登录项，App 文件名保留“云连接助手 1.0.app”；实际版本号在“关于”窗口显示为 1.1.1。
 
 App 使用临时签名，未完成 Apple 公证。若 macOS 提示无法验证开发者，请核对下载来源与校验值，再按 [Apple 的说明](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac)在“系统设置 → 隐私与安全性”中确认打开这个 App。
 
@@ -19,6 +24,7 @@ App 使用临时签名，未完成 Apple 公证。若 macOS 提示无法验证�
 - 启动、停止、查询中继状态，异常后恢复自有设置。
 - 仅监听 `127.0.0.1:443`，为 `codex-cloud-backend.chatgpt.com` 临时添加带标记的 hosts 映射。
 - GUI 启动时只为 `Wi-Fi` 追加这一个域名的系统代理例外；停止时撤销自有项，保留其他配置。
+- 开启自启守护后，运行中约每 10 秒核对本工具添加的域名例外，丢失时补回；保留当前其他例外，不接管用户原有的同域名例外。
 - 通过回环地址的系统 HTTP 代理发送 CONNECT，透传 TLS 字节，保留客户端的 SNI 和证书校验。
 - 通过代理查询加密 DNS，避免 hosts 映射导致上游连接绕回本机。
 - 管理进程维护设置和恢复备份，网络转发进程以原普通用户运行。
@@ -55,7 +61,7 @@ python3 build.py --bundle-python /absolute/path/to/standalone/python --output /a
 
 随包运行环境来源、版本和 SHA-256 见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。打包采用 `ditto`，保留运行环境的符号链接和可执行权限。
 
-v1.1.0 使用 `assets/appicon.icns`，包含 16–1024 像素图标；原始 PNG 和 imagegen 提示词也保存在 `assets/`。构建时撤除脚本模板的图标目录引用，并验证签名。
+App 使用 `assets/appicon.icns`，包含 16–1024 像素图标；原始 PNG 和 imagegen 提示词也保存在 `assets/`。构建时撤除脚本模板的图标目录引用，并验证签名。
 
 默认不探测其他目录中的旧中继。需要接管既有中继时，在保留原状态目录及其恢复备份的前提下构建：
 
@@ -80,7 +86,7 @@ Antigravity 的 Google 登录、账号选择和授权在官方应用及浏览器
 
 ## 开机自动启动（可选）
 
-首次使用先在 App 中成功启动一次中继，再在“云连接助手”菜单选择“开启开机自动启动…”或“关闭开机自动启动…”，由系统窗口完成管理员验证。v1.1.0 下载版已包含原生菜单和安装组件。也可使用仓库中的 `autostart.py` 和两个 `.command` 文件。双击 [开启开机自动启动.command](开启开机自动启动.command)，或传入 App 路径：
+首次使用先在 App 中成功启动一次中继，再在“云连接助手”菜单选择“开启开机自动启动…”或“关闭开机自动启动…”，由系统窗口完成管理员验证。下载版已包含原生菜单和安装组件。也可使用仓库中的 `autostart.py` 和两个 `.command` 文件。双击 [开启开机自动启动.command](开启开机自动启动.command)，或传入 App 路径：
 
 ```sh
 zsh ./开启开机自动启动.command "$HOME/Applications/云连接助手 1.0.app"
@@ -91,6 +97,8 @@ zsh ./开启开机自动启动.command "$HOME/Applications/云连接助手 1.0.a
 系统执行的 Python、脚本和状态位于 root 所有且普通用户不可写的 `/Library/Application Support/CloudLinkAssistant`。原状态目录和全部恢复记录会整体迁移，原路径保留链接，现有 App 的启动、停止和恢复按钮继续使用同一份状态。安装时现有中继会短暂重连；转发进程仍以原普通用户运行。
 
 手动停止后本次开机保持停止，下次重新开机再自动启动。启动进程异常退出时由系统重试；关闭助手窗口会保留后台。开机启动不保证代理额度、节点或外部网络持续可用。
+
+v1.1.1 修复了运行中域名例外被改写后不会自动恢复的问题。已开启自启时，手动“启动”也会调用同一个系统守护服务；手动停止后不继续补回例外。未开启自启时仍沿用原手动启动方式，不会擅自安装启动项。
 
 关闭自动启动可使用 App 菜单或 [关闭开机自动启动.command](关闭开机自动启动.command)。它卸载两个启动项并停止中继，撤销自有网络设置；系统副本和全部恢复记录保留，App 仍可手动启停，也可再次开启自动启动。
 
@@ -120,7 +128,7 @@ zsh ./通过系统代理启动Codex.command --check
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s . -p 'test_*.py' -q
 ```
 
-现有 30 项测试覆盖 hosts 恢复及并发修改保留、代理例外、DNS 地址校验、TLS 透传和证书校验、隔离进程生命周期、Antigravity 启动参数，以及自动启动的等待、手动停止、异常重试、状态迁移回退和反复开关。测试使用临时目录与本地随机端口；不修改真实 hosts、Wi-Fi 设置或账号，也不启动真实 Antigravity。
+现有 35 项测试覆盖 hosts 恢复及并发修改保留、代理例外、DNS 地址校验、TLS 透传和证书校验、隔离进程生命周期、Antigravity 启动参数，以及自动启动的等待、手动停止、异常重试、状态迁移回退、反复开关、域名例外恢复与停止时的竞争条件。测试使用临时目录与本地随机端口；不修改真实 hosts、Wi-Fi 设置或账号，也不启动真实 Antigravity。
 
 构建通过与隔离测试通过不等于真实管理员首启、长期云连接或 Antigravity 登录验收通过。现有用户环境下仍可能因代理和网络中断而重连。
 

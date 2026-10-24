@@ -87,6 +87,23 @@ def console_uid():
     return os.stat('/dev/console').st_uid
 
 
+def repair_bypass(relay):
+    data = relay.read_state() or {}
+    plan = data.get('proxy_bypass') or {}
+    if data.get('phase') != 'running' or not plan.get('added'):
+        return False
+    current = relay.read_bypass(plan['service'])
+    if relay.TARGET.lower() in [name.lower() for name in current]:
+        return False
+    relay.set_bypass(plan['service'], current + [relay.TARGET])
+    # A manual stop may race with the write. Never leave our exception behind.
+    if relay.control_request('status') is None or (relay.read_state() or {}).get('phase') != 'running':
+        relay.restore_bypass(plan)
+        return False
+    print('已恢复运行中中继的单域名代理例外。', flush=True)
+    return True
+
+
 def supervise(relay, uid, stopping):
     """Wait for the user's proxy; leave the GUI's manual stop in control."""
     previous = None
@@ -109,8 +126,19 @@ def supervise(relay, uid, stopping):
             relay.stop()
         return 0
     print('中继已启动；手动停止后本次开机不再自动拉起。', flush=True)
+    last_bypass_check = 0
+    bypass_error = None
     while not stopping.wait(2):
         if relay.control_request('status') is not None:
+            if time.monotonic() - last_bypass_check >= 10:
+                try:
+                    repair_bypass(relay)
+                    bypass_error = None
+                except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as error:
+                    if bypass_error != type(error).__name__:
+                        print('代理例外检查暂未完成：' + type(error).__name__, flush=True)
+                    bypass_error = type(error).__name__
+                last_bypass_check = time.monotonic()
             continue
         data = relay.read_state() or {}
         # The worker closes its control socket before the supervisor restores hosts.

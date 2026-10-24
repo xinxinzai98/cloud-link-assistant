@@ -220,7 +220,12 @@ on startRelay:sender
         do shell script "/bin/mkdir -p " & quoted form of ((POSIX path of (path to application support folder from user domain)) & "云连接助手")
         set operatorUID to do shell script "/usr/bin/id -u"
         set operatorGID to do shell script "/usr/bin/id -g"
-        set commandText to "/usr/bin/env SUDO_UID=" & quoted form of operatorUID & " SUDO_GID=" & quoted form of operatorGID & " " & my relayCommand("restart", preferredState) & " --proxy-bypass-service 'Wi-Fi'"
+        set managedStartup to (do shell script "if /bin/test -f /Library/LaunchDaemons/local.hive.cloudlinkassistant.autorelay.plist; then /usr/bin/printf yes; else /usr/bin/printf no; fi") is "yes"
+        if managedStartup then
+            set commandText to "/bin/launchctl kickstart system/local.hive.cloudlinkassistant.autorelay"
+        else
+            set commandText to "/usr/bin/env SUDO_UID=" & quoted form of operatorUID & " SUDO_GID=" & quoted form of operatorGID & " " & my relayCommand("restart", preferredState) & " --proxy-bypass-service 'Wi-Fi'"
+        end if
         do shell script commandText with administrator privileges
     on error errorText number errorNumber
         if errorNumber is not -128 then my showReport("启动未完成", errorText)
