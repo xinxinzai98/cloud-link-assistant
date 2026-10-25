@@ -205,16 +205,25 @@ def reactivate(user, app, resources):
     agent = agent_path(user)
     if any(p.exists() or p.is_symlink() for p in [DAEMON_PLIST, agent]):
         raise RuntimeError('开机启动已开启或存在同名设置，未覆盖。')
-    if (SUPPORT / 'relay.py').read_bytes() != (resources / 'relay.py').read_bytes():
-        raise RuntimeError('系统中继版本与 App 不同，请先检查升级方式。')
-    # Only the installer/monitor changes; the existing relay and recovery data stay intact.
     relay = load_relay(SUPPORT)
     relay.STATE = SUPPORT / 'relay-state'
     was_running = relay.control_request('status') is not None
-    previous_code = (SUPPORT / 'autostart.py').read_bytes()
+    incoming = {'autostart.py': (SOURCE / 'autostart.py').read_bytes(),
+                'relay.py': (resources / 'relay.py').read_bytes()}
+    previous_code = {name: (SUPPORT / name).read_bytes() for name in incoming}
+    if previous_code['relay.py'] != incoming['relay.py']:
+        phase = (relay.read_state() or {}).get('phase')
+        if was_running or phase != 'stopped':
+            raise RuntimeError('中继程序需要升级，请先停止现有中继并确认设置恢复，再重新开启自动启动。')
+    if previous_code != incoming:
+        backup = SUPPORT / ('code-before-upgrade-' + str(time.time_ns()))
+        backup.mkdir(mode=0o700)
+        for name, code in previous_code.items():
+            relay.atomic_write(backup / name, code)
     daemon, login = jobs(user, app)
     try:
-        relay.atomic_write(SUPPORT / 'autostart.py', (SOURCE / 'autostart.py').read_bytes())
+        for name, code in incoming.items():
+            relay.atomic_write(SUPPORT / name, code)
         write_plist(DAEMON_PLIST, daemon)
         write_plist(agent, login, user['uid'], user['gid'])
         subprocess.run(['/bin/launchctl', 'bootstrap', 'system', str(DAEMON_PLIST)], check=True)
@@ -228,7 +237,8 @@ def reactivate(user, app, resources):
         for path in [DAEMON_PLIST, agent]:
             if path.exists():
                 path.rename(SUPPORT / (path.name + '.failed-' + str(time.time_ns())))
-        relay.atomic_write(SUPPORT / 'autostart.py', previous_code)
+        for name, code in previous_code.items():
+            relay.atomic_write(SUPPORT / name, code)
         if was_running and relay.control_request('status') is None:
             relay.start('Wi-Fi')
         raise

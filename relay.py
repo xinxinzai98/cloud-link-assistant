@@ -232,16 +232,29 @@ async def open_tunnel(proxy, destination=TARGET):
         raise
 
 
-async def pump(reader, writer):
-    while chunk := await reader.read(65536):
-        writer.write(chunk)
-        await writer.drain()
+async def pump(reader, writer, metrics=None, read_side=None, write_side=None):
+    while True:
+        try:
+            chunk = await reader.read(65536)
+        except OSError as error:
+            error.relay_side, error.relay_action = read_side, "read"
+            raise
+        if not chunk:
+            break
+        try:
+            writer.write(chunk)
+            await writer.drain()
+        except OSError as error:
+            error.relay_side, error.relay_action = write_side, "write"
+            raise
+        if metrics is not None:
+            metrics[read_side + "_bytes"] += len(chunk)
     if writer.can_write_eof():
         with contextlib.suppress(OSError):
             writer.write_eof()
 
 
-async def forward(reader, writer, proxy, destinations=(TARGET,)):
+async def forward(reader, writer, proxy, destinations=(TARGET,), metrics=None):
     upstream = None
     tasks = []
     try:
@@ -251,11 +264,19 @@ async def forward(reader, writer, proxy, destinations=(TARGET,)):
                 source, upstream = await open_tunnel(proxy, destination)
                 break
             except (OSError, asyncio.IncompleteReadError, asyncio.LimitOverrunError, TimeoutError, RuntimeError) as error:
+                error.relay_side, error.relay_action = "upstream", "connect"
                 last_error = error
         if upstream is None:
             raise last_error or RuntimeError("没有可用的上游地址。")
-        tasks = [asyncio.create_task(pump(reader, upstream)), asyncio.create_task(pump(source, writer))]
-        await asyncio.gather(*tasks)
+        tasks = [asyncio.create_task(pump(reader, upstream, metrics, "client", "upstream")),
+                 asyncio.create_task(pump(source, writer, metrics, "upstream", "client"))]
+        done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        for task in done:
+            task.result()
+        # A client FIN may precede a long response. An upstream FIN means no more
+        # response bytes can arrive; release the slot without waiting for the client.
+        if not tasks[1].done():
+            await tasks[1]
     finally:
         for task in tasks:
             task.cancel()
@@ -272,24 +293,38 @@ async def serve(listener, proxy, control_path, ready_fd, target_info=None):
     stopping = asyncio.Event()
     connections = set()
     target_info = target_info or {"addresses": [TARGET], "ttl": 300}
-    stats = {"accepted": 0, "errors": 0, "last_error": None, "dns_refreshes": 0, "last_dns_refresh_at": None}
+    stats = {"accepted": 0, "rejected": 0, "errors": 0, "last_error": None,
+             "last_error_info": None, "reset_sides": {"client": 0, "upstream": 0},
+             "dns_refreshes": 0, "last_dns_refresh_at": None}
     loop = asyncio.get_running_loop()
     for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
         loop.add_signal_handler(signum, stopping.set)
 
     async def accept(reader, writer):
         if len(connections) >= 32:
+            stats["rejected"] += 1
             writer.close()
             return
         task = asyncio.current_task()
         connections.add(task)
         stats["accepted"] += 1
+        connection_id = stats["accepted"]
+        started = time.monotonic()
+        metrics = {"client_bytes": 0, "upstream_bytes": 0}
         try:
-            await forward(reader, writer, proxy, tuple(target_info["addresses"]))
+            await forward(reader, writer, proxy, tuple(target_info["addresses"]), metrics)
         except (OSError, asyncio.IncompleteReadError, asyncio.LimitOverrunError, TimeoutError, RuntimeError) as error:
             stats["errors"] += 1
             stats["last_error"] = type(error).__name__
-            print("连接未完成：" + type(error).__name__, flush=True)
+            side = getattr(error, "relay_side", None)
+            if isinstance(error, ConnectionResetError) and side in stats["reset_sides"]:
+                stats["reset_sides"][side] += 1
+            info = {"at": time.time(), "connection_id": connection_id, "type": type(error).__name__,
+                    "side": side, "action": getattr(error, "relay_action", None),
+                    "errno": getattr(error, "errno", None),
+                    "duration_seconds": round(time.monotonic() - started, 3), **metrics}
+            stats["last_error_info"] = info
+            print(json.dumps({"event": "connection_error", **info}), flush=True)
         finally:
             connections.discard(task)
 
@@ -302,6 +337,9 @@ async def serve(listener, proxy, control_path, ready_fd, target_info=None):
                       "upstream_addresses": target_info["addresses"], **stats}
             writer.write((json.dumps(result) + "\n").encode())
             await writer.drain()
+        except (ConnectionError, TimeoutError):
+            # Status clients may time out or close before reading the reply.
+            pass
         finally:
             writer.close()
 
@@ -337,7 +375,11 @@ def control_request(command):
             client.settimeout(2)
             client.connect(data["control_socket"])
             client.sendall(command.encode() + b"\n")
-            return json.loads(client.recv(4096))
+            with client.makefile("rb") as stream:
+                response = stream.readline(4097)
+            if len(response) > 4096 or not response.endswith(b"\n"):
+                return None
+            return json.loads(response)
     except (OSError, ValueError):
         return None
 
@@ -494,8 +536,11 @@ def start(proxy_bypass_service=None):
 
 
 def stop():
-    if control_request("stop") is None:
-        data = read_state() or {}
+    response = control_request("stop")
+    data = read_state() or {}
+    # launchctl may already have asked the supervisor to stop. Its control
+    # socket closes before settings restoration finishes; wait for that result.
+    if response is None and data.get("phase") not in ("running", "starting"):
         if MARKER in HOSTS.read_bytes() or data.get("phase") == "needs_restore":
             raise RuntimeError("进程未响应但恢复尚未确认，请运行“恢复解析.command”。")
         print("中继未运行，hosts 无中继映射。")
@@ -542,7 +587,13 @@ def main():
             print("running\n运行中")
             print(f"已运行 {minutes} 分钟 · 当前转发连接 {live['connections']} 个")
             print(f"DNS 已刷新 {live.get('dns_refreshes', 0)} 次 · 连接错误 {live.get('errors', 0)} 次")
-            print("最近错误：" + (live.get("last_error") or "无"))
+            recent = live.get("last_error") or "无"
+            info = live.get("last_error_info")
+            if info:
+                side = {"client": "客户端", "upstream": "上游"}.get(info.get("side"), "未知端")
+                action = {"read": "读取", "write": "写入", "connect": "连接"}.get(info.get("action"), "")
+                recent += "（" + side + action + "，" + time.strftime("%m-%d %H:%M:%S", time.localtime(info["at"])) + "）"
+            print("最近错误：" + recent)
         elif data.get("phase") == "needs_restore" or (data and MARKER in HOSTS.read_bytes()):
             print("needs_restore\n需要恢复设置\n中继进程无法联系，请刷新或使用“恢复设置”。")
         else:

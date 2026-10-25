@@ -8,9 +8,11 @@ import select
 import signal
 import socket
 import ssl
+import struct
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from unittest import mock
@@ -71,6 +73,51 @@ class HostsTests(unittest.TestCase):
             {"type": 1, "data": "104.18.32.47", "TTL": 10000},
         ]})
         self.assertEqual(info, {"addresses": ["104.18.32.47"], "ttl": 300})
+
+
+class ControlTests(unittest.TestCase):
+    def test_stop_waits_for_supervisor_already_shutting_down(self):
+        with tempfile.TemporaryDirectory() as directory:
+            hosts = Path(directory) / 'hosts'
+            hosts.write_bytes(b'127.0.0.1 localhost\n')
+            phases = [{'phase': 'running'}, {'phase': 'running'}, {'phase': 'stopped'}]
+            with mock.patch.object(relay, 'HOSTS', hosts), \
+                    mock.patch.object(relay, 'control_request', return_value=None), \
+                    mock.patch.object(relay, 'read_state', side_effect=phases), \
+                    mock.patch.object(relay.time, 'sleep'):
+                relay.stop()
+            self.assertEqual(hosts.read_bytes(), b'127.0.0.1 localhost\n')
+
+    def request_reply(self, chunks):
+        with tempfile.TemporaryDirectory(dir='/private/tmp') as directory:
+            path = str(Path(directory) / 'control.sock')
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+                listener.bind(path)
+                listener.listen()
+
+                def respond():
+                    with listener.accept()[0] as peer:
+                        peer.recv(64)
+                        for chunk in chunks:
+                            with contextlib.suppress(BrokenPipeError):
+                                peer.sendall(chunk)
+                            time.sleep(0.02)
+
+                worker = threading.Thread(target=respond, daemon=True)
+                worker.start()
+                try:
+                    with mock.patch.object(relay, 'read_state', return_value={'phase': 'running', 'control_socket': path}):
+                        return relay.control_request('status')
+                finally:
+                    worker.join(2)
+                    self.assertFalse(worker.is_alive())
+
+    def test_status_accepts_a_fragmented_reply(self):
+        self.assertEqual(self.request_reply([b'{"running":', b'true}\n']), {'running': True})
+
+    def test_status_rejects_oversized_or_unterminated_reply(self):
+        for chunks in ([b'x' * 4097], [b'{"running":true}']):
+            self.assertIsNone(self.request_reply(chunks))
 
 
 class LifecycleTests(unittest.TestCase):
@@ -239,6 +286,111 @@ class TunnelTests(unittest.IsolatedAsyncioTestCase):
         proxy_port = await self.server(reject)
         with self.assertRaises(RuntimeError):
             await relay.open_tunnel(("127.0.0.1", proxy_port))
+
+    async def test_upstream_eof_releases_slot_while_client_is_still_open(self):
+        finished = asyncio.Event()
+
+        async def proxy(reader, writer):
+            await reader.readuntil(b"\r\n\r\n")
+            writer.write(b"HTTP/1.1 200 OK\r\n\r\nfinished")
+            await writer.drain()
+            writer.write_eof()
+            await reader.read()
+
+        proxy_port = await self.server(proxy)
+
+        async def forward(reader, writer):
+            try:
+                await relay.forward(reader, writer, ("127.0.0.1", proxy_port))
+            finally:
+                finished.set()
+
+        port = await self.server(forward)
+        reader, writer = await asyncio.open_connection("127.0.0.1", port)
+        try:
+            self.assertEqual(await asyncio.wait_for(reader.read(), 1), b"finished")
+            await asyncio.wait_for(finished.wait(), 0.5)
+        finally:
+            writer.close()
+            await writer.wait_closed()
+
+    async def test_client_half_close_keeps_delayed_response_intact(self):
+        payload = bytes(range(256)) * 4096
+
+        async def proxy(reader, writer):
+            await reader.readuntil(b"\r\n\r\n")
+            writer.write(b"HTTP/1.1 200 OK\r\n\r\n")
+            await writer.drain()
+            self.assertEqual(await reader.read(), b"request")
+            await asyncio.sleep(0.03)
+            writer.write(payload)
+            await writer.drain()
+
+        proxy_port = await self.server(proxy)
+        port = await self.server(lambda r, w: relay.forward(r, w, ("127.0.0.1", proxy_port)))
+        reader, writer = await asyncio.open_connection("127.0.0.1", port)
+        try:
+            writer.write(b"request")
+            await writer.drain()
+            writer.write_eof()
+            self.assertEqual(await asyncio.wait_for(reader.read(), 2), payload)
+        finally:
+            writer.close()
+            await writer.wait_closed()
+
+    async def test_records_whether_reset_came_from_client_or_upstream(self):
+        for side in ('client', 'upstream'):
+            with self.subTest(side=side):
+                trigger = asyncio.Event()
+                finished = asyncio.Event()
+                failures = []
+                metrics = {'client_bytes': 0, 'upstream_bytes': 0}
+
+                def reset(writer):
+                    writer.get_extra_info('socket').setsockopt(socket.SOL_SOCKET, socket.SO_LINGER,
+                                                              struct.pack('ii', 1, 0))
+                    writer.transport.abort()
+
+                async def proxy(reader, writer):
+                    await reader.readuntil(b'\r\n\r\n')
+                    writer.write(b'HTTP/1.1 200 OK\r\n\r\n')
+                    await writer.drain()
+                    writer.write(await reader.readexactly(4))
+                    await writer.drain()
+                    await trigger.wait()
+                    if side == 'upstream':
+                        reset(writer)
+                    else:
+                        with contextlib.suppress(ConnectionError):
+                            await reader.read()
+
+                proxy_port = await self.server(proxy)
+
+                async def forward(reader, writer):
+                    try:
+                        await relay.forward(reader, writer, ('127.0.0.1', proxy_port), metrics=metrics)
+                    except ConnectionResetError as error:
+                        failures.append((error.relay_side, error.relay_action))
+                    finally:
+                        finished.set()
+
+                port = await self.server(forward)
+                reader, writer = await asyncio.open_connection('127.0.0.1', port)
+                try:
+                    writer.write(b'ping')
+                    await writer.drain()
+                    self.assertEqual(await asyncio.wait_for(reader.readexactly(4), 1), b'ping')
+                    trigger.set()
+                    if side == 'client':
+                        reset(writer)
+                    await asyncio.wait_for(finished.wait(), 1)
+                    self.assertEqual(len(failures), 1)
+                    self.assertEqual(failures[0][0], side)
+                    self.assertEqual(metrics, {'client_bytes': 4, 'upstream_bytes': 4})
+                finally:
+                    writer.close()
+                    with contextlib.suppress(ConnectionError):
+                        await writer.wait_closed()
 
     async def test_bounds_proxy_response_header(self):
         async def oversized(reader, writer):

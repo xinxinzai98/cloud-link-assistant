@@ -79,6 +79,7 @@ class AutostartTests(unittest.TestCase):
             (support / 'installation.json').write_text(json.dumps({'installed_at': 1}))
             relay = mock.Mock()
             relay.control_request.return_value = None
+            relay.read_state.return_value = {'phase': 'stopped'}
             relay.atomic_write.side_effect = lambda path, data: path.write_bytes(data)
             with mock.patch.multiple(autostart, SUPPORT=support, DAEMON_PLIST=daemon,
                                      trusted=mock.Mock(), require_root=mock.Mock(),
@@ -107,6 +108,25 @@ class AutostartTests(unittest.TestCase):
                 autostart.reactivate(user, app, resources)
             relay.atomic_write.assert_not_called()
 
+    def test_reactivation_updates_stopped_relay_and_preserves_recovery_data(self):
+        with self.installed_fixture() as (support, user, app, resources, daemon, relay):
+            (resources / 'relay.py').write_bytes(b'updated relay fixture')
+            autostart.reactivate(user, app, resources)
+            self.assertEqual((support / 'relay.py').read_bytes(), b'updated relay fixture')
+            backup, = support.glob('code-before-upgrade-*')
+            self.assertEqual((backup / 'relay.py').read_bytes(), b'fixed relay fixture')
+            self.assertEqual((support / 'relay-state/hosts-before-test.bin').read_bytes(), b'original recovery data')
+            self.assertTrue(autostart.old_state(user).is_symlink())
+
+    def test_reactivation_refuses_to_replace_a_running_relay(self):
+        with self.installed_fixture() as (support, user, app, resources, daemon, relay):
+            (resources / 'relay.py').write_bytes(b'updated relay fixture')
+            relay.control_request.return_value = {'running': True}
+            with self.assertRaisesRegex(RuntimeError, '先停止'):
+                autostart.reactivate(user, app, resources)
+            self.assertEqual((support / 'relay.py').read_bytes(), b'fixed relay fixture')
+            relay.atomic_write.assert_not_called()
+
     def test_reactivation_does_not_overwrite_existing_jobs(self):
         with self.installed_fixture() as (support, user, app, resources, daemon, relay):
             daemon.write_bytes(b'existing job')
@@ -115,8 +135,18 @@ class AutostartTests(unittest.TestCase):
             self.assertEqual(daemon.read_bytes(), b'existing job')
             relay.atomic_write.assert_not_called()
 
+    def test_upgrade_refuses_an_unresponsive_relay_with_running_state(self):
+        with self.installed_fixture() as (support, user, app, resources, daemon, relay):
+            (resources / 'relay.py').write_bytes(b'updated relay fixture')
+            relay.read_state.return_value = {'phase': 'running'}
+            with self.assertRaisesRegex(RuntimeError, '先停止'):
+                autostart.reactivate(user, app, resources)
+            self.assertEqual((support / 'relay.py').read_bytes(), b'fixed relay fixture')
+            relay.atomic_write.assert_not_called()
+
     def test_reactivation_rolls_back_failed_registration(self):
         with self.installed_fixture() as (support, user, app, resources, daemon, relay):
+            (resources / 'relay.py').write_bytes(b'updated relay fixture')
             def register(args, **kwargs):
                 if args[:3] == ['/bin/launchctl', 'bootstrap', 'gui/' + str(user['uid'])]:
                     raise subprocess.CalledProcessError(1, args)
@@ -126,6 +156,7 @@ class AutostartTests(unittest.TestCase):
             self.assertFalse(daemon.exists())
             self.assertFalse(autostart.agent_path(user).exists())
             self.assertEqual((support / 'autostart.py').read_bytes(), b'previous protected installer')
+            self.assertEqual((support / 'relay.py').read_bytes(), b'fixed relay fixture')
             self.assertEqual((support / 'relay-state/hosts-before-test.bin').read_bytes(), b'original recovery data')
 
     def test_state_migration_preserves_backups_and_gui_path(self):
