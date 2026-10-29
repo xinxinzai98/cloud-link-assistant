@@ -8,7 +8,6 @@ property statusLabel : missing value
 property detailLabel : missing value
 property modelStatusLabel : missing value
 property modelDetailLabel : missing value
-property antiLabel : missing value
 property startButton : missing value
 property stopButton : missing value
 property restoreButton : missing value
@@ -112,38 +111,30 @@ on makeButton(theText, actionName, x, y, w)
 end makeButton
 
 on makeWindow()
-    set mainWindow to current application's NSWindow's alloc()'s initWithContentRect:{{0, 0}, {600, 740}} styleMask:7 backing:2 defer:false
+    set mainWindow to current application's NSWindow's alloc()'s initWithContentRect:{{0, 0}, {600, 610}} styleMask:7 backing:2 defer:false
     mainWindow's setTitle:"云连接助手"
     mainWindow's setReleasedWhenClosed:false
     mainWindow's |center|()
-    my makeLabel("云连接助手", 25, 28, 680, 540, 34, true)
-    set subtitle to my makeLabel("Codex 云连接、本机 HTTPS/SSE 与 Antigravity 授权入口", 13, 28, 654, 540, 24, false)
+    my makeLabel("云连接助手", 25, 28, 550, 540, 34, true)
+    set subtitle to my makeLabel("Codex 云连接、本机 HTTPS/SSE 与就绪启动", 13, 28, 524, 540, 24, false)
     subtitle's setTextColor:(current application's NSColor's secondaryLabelColor())
-    my makeLabel("Codex 云中继", 17, 28, 608, 350, 28, true)
-    set statusLabel to my makeLabel("检查中…", 15, 430, 608, 140, 28, true)
-    set detailLabel to my makeLabel("", 13, 28, 520, 544, 80, false)
-    set startButton to my makeButton("启动", "startRelay:", 24, 473, 112)
-    set stopButton to my makeButton("停止", "stopRelay:", 148, 473, 112)
-    my makeButton("刷新状态", "refreshClicked:", 272, 473, 112)
-    set restoreButton to my makeButton("恢复设置", "restoreRelay:", 396, 473, 176)
-    set separator to current application's NSBox's alloc()'s initWithFrame:{{28, 456}, {544, 1}}
+    my makeLabel("Codex 云中继", 17, 28, 478, 350, 28, true)
+    set statusLabel to my makeLabel("检查中…", 15, 430, 478, 140, 28, true)
+    set detailLabel to my makeLabel("", 13, 28, 390, 544, 80, false)
+    set startButton to my makeButton("启动", "startRelay:", 24, 343, 112)
+    set stopButton to my makeButton("停止", "stopRelay:", 148, 343, 112)
+    my makeButton("刷新状态", "refreshClicked:", 272, 343, 112)
+    set restoreButton to my makeButton("恢复设置", "restoreRelay:", 396, 343, 176)
+    set separator to current application's NSBox's alloc()'s initWithFrame:{{28, 326}, {544, 1}}
     separator's setBoxType:(current application's NSBoxSeparator)
     mainWindow's contentView()'s addSubview:separator
-    my makeLabel("本机聊天 HTTPS/SSE", 17, 28, 418, 350, 28, true)
-    set modelStatusLabel to my makeLabel("检查中…", 15, 430, 418, 140, 28, true)
-    set modelDetailLabel to my makeLabel("", 12, 28, 345, 544, 68, false)
-    my makeButton("启用本机优化", "enableModel:", 24, 300, 172)
-    my makeButton("恢复原连接", "restoreModel:", 208, 300, 172)
-    my makeButton("停止本机中继…", "stopModel:", 392, 300, 180)
-    set modelSeparator to current application's NSBox's alloc()'s initWithFrame:{{28, 276}, {544, 1}}
-    modelSeparator's setBoxType:(current application's NSBoxSeparator)
-    mainWindow's contentView()'s addSubview:modelSeparator
-    my makeLabel("Antigravity 登录与授权", 17, 28, 228, 540, 28, true)
-    set antiLabel to my makeLabel("正在检查安装状态…", 12, 28, 203, 544, 23, false)
-    antiLabel's setTextColor:(current application's NSColor's secondaryLabelColor())
-    my makeButton("代理启动 / 登录入口", "openAntigravity:", 24, 163, 212)
-    my makeButton("检查授权网络", "checkAntigravity:", 248, 163, 176)
-    set reportLabel to my makeLabel("检查结果将显示在这里。Google 登录和授权在官方窗口完成。", 12, 28, 47, 544, 108, false)
+    my makeLabel("本机聊天 HTTPS/SSE", 17, 28, 288, 350, 28, true)
+    set modelStatusLabel to my makeLabel("检查中…", 15, 430, 288, 140, 28, true)
+    set modelDetailLabel to my makeLabel("", 12, 28, 215, 544, 68, false)
+    my makeButton("启用本机优化", "enableModel:", 24, 170, 172)
+    my makeButton("恢复原连接", "restoreModel:", 208, 170, 172)
+    my makeButton("停止本机中继…", "stopModel:", 392, 170, 180)
+    set reportLabel to my makeLabel("连接状态与操作结果将显示在这里。", 12, 28, 47, 544, 108, false)
     reportLabel's setTextColor:(current application's NSColor's secondaryLabelColor())
     set quitPanel to current application's NSView's alloc()'s initWithFrame:{{20, 35}, {560, 122}}
     set quitTitle to current application's NSTextField's labelWithString:"退出助手时如何处理中继？"
@@ -255,8 +246,6 @@ on refreshState()
         startButton's setEnabled:(not relayRunning)
         stopButton's setEnabled:relayRunning
         restoreButton's setEnabled:(not relayRunning)
-        set antiInfo to do shell script quoted form of pythonPath & " -B " & quoted form of (resourcesDir & "/antigravity_helper.py") & " info"
-        antiLabel's setStringValue:antiInfo
         set startupInstalled to (do shell script "if /bin/test -f /Library/LaunchDaemons/local.hive.cloudlinkassistant.autorelay.plist; then /usr/bin/printf yes; else /usr/bin/printf no; fi") is "yes"
         enableStartupItem's setEnabled:(not startupInstalled)
         disableStartupItem's setEnabled:startupInstalled
@@ -323,28 +312,6 @@ end restoreRelay:
 on refreshClicked:sender
     my refreshState()
 end refreshClicked:
-
-on openAntigravity:sender
-    try
-        set messageText to do shell script quoted form of pythonPath & " -B " & quoted form of (resourcesDir & "/antigravity_helper.py") & " open"
-        my showReport("Antigravity 登录与授权", messageText)
-    on error errorText
-        my showReport("无法打开 Antigravity", errorText)
-    end try
-end openAntigravity:
-
-on checkAntigravity:sender
-    my showReport("授权网络检查", "正在通过系统代理检查，请稍候…")
-    my beginAction("检查网络…")
-    try
-        set messageText to do shell script quoted form of pythonPath & " -B " & quoted form of (resourcesDir & "/antigravity_helper.py") & " check"
-        my showReport("授权网络检查", messageText)
-    on error errorText
-        my showReport("检查未完成", errorText)
-    end try
-    set busy to false
-    my refreshState()
-end checkAntigravity:
 
 on idle
     if mainWindow is not missing value and not busy then

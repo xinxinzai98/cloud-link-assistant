@@ -1,6 +1,6 @@
 # 随包运行环境
 
-GitHub Releases 的 Apple Silicon 安装包（v1.0.0 至 v1.2.0）包含 CPython 3.14.9，来自 Astral 维护的 [python-build-standalone](https://github.com/astral-sh/python-build-standalone) 项目。
+GitHub Releases 的 Apple Silicon 安装包（v1.0.0 至 v1.2.1）包含 CPython 3.14.9，来自 Astral 维护的 [python-build-standalone](https://github.com/astral-sh/python-build-standalone) 项目。
 
 - 上游发布版本：[20261021](https://github.com/astral-sh/python-build-standalone/releases/tag/20261021)
 - 原始资产：`cpython-3.14.9+20261021-aarch64-apple-darwin-install_only_stripped.tar.gz`

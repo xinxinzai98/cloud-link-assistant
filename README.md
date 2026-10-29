@@ -2,22 +2,24 @@
 
 <img src="assets/app-icon.png" alt="云连接助手图标" width="96" height="96">
 
-macOS 原生 AppKit 窗口，用现有系统代理连接 Codex 云服务，提供可选的本机 HTTPS/SSE 中继、连接就绪后启动 Codex，以及本机官方 Antigravity 的代理启动与授权网络检查入口。使用 AppleScriptObjC 和 Python 标准库，没有新增第三方 Python 依赖。
+macOS 原生 AppKit 窗口，用现有系统代理连接 Codex 云服务，提供可选的本机 HTTPS/SSE 中继、连接就绪后启动 Codex。使用 AppleScriptObjC 和 Python 标准库，没有新增第三方 Python 依赖。
 
 ## 下载 macOS App
 
-[下载 v1.2.0 Apple Silicon 版](https://github.com/xinxinzai98/cloud-link-assistant/releases/download/v1.2.0/cloud-link-assistant-v1.2.0-macos-arm64.zip) · [发布页与校验文件](https://github.com/xinxinzai98/cloud-link-assistant/releases/tag/v1.2.0)
+[下载 v1.2.1 Apple Silicon 版](https://github.com/xinxinzai98/cloud-link-assistant/releases/download/v1.2.1/cloud-link-assistant-v1.2.1-macos-arm64.zip) · [发布页与校验文件](https://github.com/xinxinzai98/cloud-link-assistant/releases/tag/v1.2.1)
 
 适用于 M 系列芯片 Mac。Releases 版内置 Python，无需另外安装 Homebrew 或 Python。解压 ZIP，将 App 拖入“应用程序”，开启已有系统代理后打开。Intel Mac 暂未提供经过验证的安装包。
 
 升级已有版本时：
+
+从 v1.2.0 升级到 v1.2.1 时，Codex 核心脚本未改变：可在助手选择“保留后台并退出”，保留原路径替换 App 后重开，继续使用现有中继与配置。更早版本按下述流程同步系统副本。
 
 1. 已开启云中继自启的用户，先在旧版菜单选择“关闭开机自动启动…”（新版名称为“关闭云中继开机启动…”），退出窗口后替换原 App，再在新版菜单重新开启。这样会同时更新系统中的守护程序副本，仅替换 App 不会更新正在运行的系统副本。操作期间云连接会短暂重连，恢复记录保留。
 2. 未开启自启的用户，先停止旧中继并退出窗口，再替换原 App、从新版启动。
 
 旧版关闭自启时若提示“进程未响应但恢复尚未确认”，先刷新状态；只有确认“已停止”后，再执行一次“关闭开机自动启动…”并确认成功。若仍显示“需要恢复设置”，先完成恢复再继续升级。
 
-保持原 App 路径和文件名，并保留旧状态目录及其恢复备份，直到停止和恢复设置都已确认完成。为兼容已登记的登录项，App 文件名保留“云连接助手 1.0.app”；实际版本号在“关于”窗口显示为 1.2.0。
+保持原 App 路径和文件名，并保留旧状态目录及其恢复备份，直到停止和恢复设置都已确认完成。为兼容已登记的登录项，App 文件名保留“云连接助手 1.0.app”；实际版本号在“关于”窗口显示为 1.2.1。
 
 已有独立安装的本机 HTTPS/SSE 中继时，在新版点一次“启用本机优化”即可接入管理、保存私有备份并更新后续启动代码。现有中继进程继续运行，待结束聊天后重启中继或下次开机加载新代码。不要在聊天运行期间选择“停止本机中继”。
 
@@ -32,12 +34,15 @@ App 使用临时签名，未完成 Apple 公证。若 macOS 提示无法验证�
 - 通过回环地址的系统 HTTP 代理发送 CONNECT，透传 TLS 字节，保留客户端的 SNI 和证书校验。
 - 通过代理查询加密 DNS，避免 hosts 映射导致上游连接绕回本机。
 - 管理进程维护设置和恢复备份，网络转发进程以原普通用户运行。
-- 打开 Antigravity；未运行时附带进程级代理参数，已运行时只显示现有窗口。
 - 可选启用本机 `127.0.0.1:19847` HTTPS/SSE 中继，只转发官方 `chatgpt.com/backend-api/codex` 的模型列表、Responses 与压缩端点；完整保留 TLS 证书及主机名校验，通过当前回环地址上的系统 HTTPS 代理连接，不回退直连。
 - 本机优化只在 `~/.codex/config.toml` 添加 `openai_base_url = "http://127.0.0.1:19847"`，保留官方 `openai` 提供商、账号、模型及其他设置。已有其他提供商或自定义接口时拒绝自动覆盖。请求正文、图片和授权头只在内存转发，不写日志或凭据缓存。
 - 本机中继使用普通用户 LaunchAgent。启用本机优化且开启云中继自启后，登录项会等待代理端口、两条中继、云域名解析及例外、两个官方域名的 TLS 校验通过，再打开助手和 Codex；已经运行的应用保持原样。
 
 云中继启动、恢复系统设置及云中继自启需要 macOS 管理员授权；本机 HTTPS/SSE 优化使用当前普通用户，不需要管理员权限。关闭窗口保留后台；退出时可选择保留后台或停止全部中继。首次打开 App 不会自动改变连接配置；本机优化和云中继自启分别由用户明确启用。
+
+## v1.2.1：精简连接功能
+
+界面和安装包仅保留 Codex 云中继、本机 HTTPS/SSE 及就绪启动，移除其他软件的登录、授权网络检查和对应后台脚本。窗口同步缩小，Codex 中继和配置逻辑保持原样。
 
 ## v1.2.0：本机 HTTPS/SSE 与就绪启动
 
@@ -67,7 +72,6 @@ App 中新增“本机聊天 HTTPS/SSE”区域：
 - macOS，内置 `osacompile`、`codesign` 和 AppKit；本机使用 Python 3.14 验证，构建脚本要求 Python 3.11+。
 - 已开启系统 HTTPS 代理，地址为 `127.0.0.1`、`localhost` 或 `::1`，代理支持 HTTP CONNECT。
 - `127.0.0.1:443` 未被其他服务占用；GUI 当前按 `Wi-Fi` 网络服务处理代理例外。
-- 使用 Antigravity 入口时，官方应用应安装在 `/Applications/Antigravity.app`。
 
 上述 Python 与编译工具用于源码构建。默认源码构建复用指定的本机 Python；Releases 安装包随 App 打包可搬移的 Python 运行环境。
 
@@ -112,7 +116,6 @@ python3 build.py --legacy-state /absolute/path/to/existing/.state
 3. 停止中继后，程序撤销自有 hosts 映射和代理例外。
 4. 若显示“需要恢复设置”，保留状态目录和备份，使用“恢复设置”。
 
-Antigravity 的 Google 登录、账号选择和授权在官方应用及浏览器完成。助手不读取或保存登录令牌。匿名 TLS 检查通过只代表网络连通，不代表登录成功、账号地区符合条件或模型可用。地区申请及账号受理也由 Google 处理。
 
 ## 开机自动启动（可选）
 
@@ -172,15 +175,14 @@ macOS 的“重新登录时重新打开窗口”以及手动提前打开 Codex �
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s . -p 'test_*.py' -q
 ```
 
-源码现有 71 项隔离测试，覆盖原云中继的恢复、TLS 透传、连接生命周期与自启策略，以及本机中继的压缩正文与授权头透传、实时 SSE、分块请求、模型缓存 304、压缩端点、截断不重放、接口配置保留、安装回退、并发编辑保留、已有中继接入、未知端口拒绝、恢复与停止、就绪等待和自启重装。测试使用临时目录与本地随机端口；不修改真实 hosts、Wi-Fi 设置或账号，不启动真实 Antigravity，也不重启现有聊天。
+源码现有 69 项隔离测试，覆盖原云中继的恢复、TLS 透传、连接生命周期与自启策略，以及本机中继的压缩正文与授权头透传、实时 SSE、分块请求、模型缓存 304、压缩端点、截断不重放、接口配置保留、安装回退、并发编辑保留、已有中继接入、未知端口拒绝、恢复与停止、就绪等待和自启重装。测试使用临时目录与本地随机端口；不修改真实 hosts、Wi-Fi 设置或账号，也不重启现有聊天。
 
-构建通过与隔离测试通过不等于真实管理员首启、长期云连接或 Antigravity 登录验收通过。现有用户环境下仍可能因代理和网络中断而重连。
+构建通过与隔离测试通过不等于真实管理员首启、长期云连接验收通过。现有用户环境下仍可能因代理和网络中断而重连。
 
 ## 源码
 
 - `main.applescript`：原生窗口、状态与启停入口；解释器和可选旧状态路径由构建时填入。
 - `relay.py`：固定域名的 CONNECT 中继与设置恢复。
-- `antigravity_helper.py`：官方应用入口、进程代理及匿名 TLS 检查。
 - `通过系统代理启动Codex.command`：以现有系统代理启动 Codex 的可选入口，保留系统代理例外。
 - `https_compat.py`、`test_https_compat.py`：仅回环监听、固定官方上游的模型 HTTPS/SSE 中继与隔离验证。
 - `model_service.py`、`test_model_service.py`：本机优化的用户级安装、私有备份、恢复、启停和自启接入。
@@ -188,6 +190,6 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s . -p 'test_*.py' -q
 - `build.py`：编译、临时签名和打包。
 - `autostart.py`：系统启动项安装、代理等待及可恢复关闭；两个开关 `.command` 文件为入口。
 - `THIRD_PARTY_NOTICES.md`：随包 Python 的来源与许可证位置。
-- `test_relay.py`、`test_antigravity.py`、`test_autostart.py`：隔离测试。
+- `test_relay.py`、`test_autostart.py`：隔离测试。
 
 Git 只保存源码与说明。运行日志、hosts 备份、账号信息、OAuth 回调、地区申请材料、截图和 App 产物不纳入仓库。
