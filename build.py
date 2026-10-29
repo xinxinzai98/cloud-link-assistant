@@ -46,7 +46,8 @@ with tempfile.TemporaryDirectory(prefix='cloudlink-build-', dir='/private/tmp') 
     script_path.write_text(script)
     subprocess.run(['/usr/bin/osacompile', '-s', '-o', str(app), str(script_path)], check=True)
     resources = app / 'Contents/Resources'
-    for resource in ['relay.py', 'antigravity_helper.py', 'autostart.py', 'THIRD_PARTY_NOTICES.md']:
+    for resource in ['relay.py', 'antigravity_helper.py', 'autostart.py', 'https_compat.py',
+                     'model_service.py', 'login_ready.py', '通过系统代理启动Codex.command', 'THIRD_PARTY_NOTICES.md']:
         shutil.copyfile(SOURCE / resource, resources / resource)
     if bundled:
         shutil.copytree(bundled, resources / 'python', symlinks=True, ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
@@ -58,7 +59,7 @@ with tempfile.TemporaryDirectory(prefix='cloudlink-build-', dir='/private/tmp') 
     # osacompile's template catalog name overrides a custom ICNS file.
     info.pop('CFBundleIconName', None)
     info.update(CFBundleIdentifier='local.hive.cloudlinkassistant', CFBundleDisplayName='云连接助手',
-                CFBundleName='云连接助手', CFBundleShortVersionString='1.1.2', CFBundleVersion='9',
+                CFBundleName='云连接助手', CFBundleShortVersionString='1.2.0', CFBundleVersion='10',
                 CFBundleIconFile='appicon.icns', NSHighResolutionCapable=True, OSAAppletStayOpen=True)
     info_path.write_bytes(plistlib.dumps(info))
     for attr in ['com.apple.FinderInfo', 'com.apple.ResourceFork']:

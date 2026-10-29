@@ -59,6 +59,17 @@ def jobs(user, app):
     agent = {'Label': AGENT_LABEL, 'RunAtLoad': True,
              'ProgramArguments': ['/usr/bin/open', '-a', str(app)],
              'LimitLoadToSessionType': 'Aqua', 'ProcessType': 'Interactive'}
+    if user.get('home'):
+        model = Path(user['home']) / 'Library/Application Support/云连接助手/model-https-compat'
+        record = model / 'install-state.json'
+        if record.is_file() and (model / 'login_ready.py').is_file():
+            state = json.loads(record.read_text())
+            if state.get('enabled'):
+                # This job is a user agent: root never executes user-owned scripts.
+                agent.update(ProgramArguments=[str(SUPPORT / 'python/bin/python3'), '-I', '-B',
+                                                str(model / 'login_ready.py'), '--helper-app', str(app)],
+                             StandardOutPath=str(model / 'startup.log'),
+                             StandardErrorPath=str(model / 'startup.stderr.log'))
     return daemon, agent
 
 

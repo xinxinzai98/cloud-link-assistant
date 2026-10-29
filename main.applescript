@@ -6,6 +6,8 @@ property parent : class "NSObject"
 property mainWindow : missing value
 property statusLabel : missing value
 property detailLabel : missing value
+property modelStatusLabel : missing value
+property modelDetailLabel : missing value
 property antiLabel : missing value
 property startButton : missing value
 property stopButton : missing value
@@ -17,6 +19,7 @@ property quitPanel : missing value
 property allowQuit : false
 property busy : false
 property relayRunning : false
+property modelRunning : false
 property resourcesDir : ""
 property pythonPath : "__CLOUDLINK_PYTHON__"
 property bundledPython : __CLOUDLINK_BUNDLED__
@@ -43,10 +46,10 @@ end run
 on makeStartupMenu()
     set applicationMenu to (current application's NSApp's mainMenu()'s itemAtIndex:0)'s submenu()
     applicationMenu's setAutoenablesItems:false
-    set enableStartupItem to current application's NSMenuItem's alloc()'s initWithTitle:"开启开机自动启动…" action:"enableStartup:" keyEquivalent:""
+    set enableStartupItem to current application's NSMenuItem's alloc()'s initWithTitle:"开启云中继开机启动…" action:"enableStartup:" keyEquivalent:""
     enableStartupItem's setTarget:me
     applicationMenu's insertItem:enableStartupItem atIndex:2
-    set disableStartupItem to current application's NSMenuItem's alloc()'s initWithTitle:"关闭开机自动启动…" action:"disableStartup:" keyEquivalent:""
+    set disableStartupItem to current application's NSMenuItem's alloc()'s initWithTitle:"关闭云中继开机启动…" action:"disableStartup:" keyEquivalent:""
     disableStartupItem's setTarget:me
     applicationMenu's insertItem:disableStartupItem atIndex:3
     applicationMenu's insertItem:(current application's NSMenuItem's separatorItem()) atIndex:4
@@ -65,9 +68,9 @@ on changeStartup(actionName)
         end if
         do shell script commandText with administrator privileges
         if actionName is "install" then
-            my showReport("开机自动启动已开启", "以后开机登录后会打开助手，中继会等待现有系统代理就绪后自动启动。仍可用“停止”暂停本次使用。")
+            my showReport("云中继开机启动已开启", "中继会等待系统代理后启动。已启用本机 HTTPS/SSE 时，会在两条中继就绪后打开 Codex。仍可手动停止。")
         else
-            my showReport("开机自动启动已关闭", "启动项已关闭，中继已停止并恢复网络设置。以后仍可在此手动启动。")
+            my showReport("云中继开机启动已关闭", "云中继已停止并恢复网络设置。本机 HTTPS/SSE 独立控制，可在窗口中恢复或停止。")
         end if
     on error errorText number errorNumber
         if errorNumber is not -128 then my showReport("开机启动设置未完成", errorText)
@@ -109,23 +112,32 @@ on makeButton(theText, actionName, x, y, w)
 end makeButton
 
 on makeWindow()
-    set mainWindow to current application's NSWindow's alloc()'s initWithContentRect:{{0, 0}, {600, 550}} styleMask:7 backing:2 defer:false
+    set mainWindow to current application's NSWindow's alloc()'s initWithContentRect:{{0, 0}, {600, 740}} styleMask:7 backing:2 defer:false
     mainWindow's setTitle:"云连接助手"
     mainWindow's setReleasedWhenClosed:false
     mainWindow's |center|()
-    my makeLabel("云连接助手", 25, 28, 490, 540, 34, true)
-    set subtitle to my makeLabel("Codex 云连接与本机 Antigravity 授权入口", 13, 28, 464, 540, 24, false)
+    my makeLabel("云连接助手", 25, 28, 680, 540, 34, true)
+    set subtitle to my makeLabel("Codex 云连接、本机 HTTPS/SSE 与 Antigravity 授权入口", 13, 28, 654, 540, 24, false)
     subtitle's setTextColor:(current application's NSColor's secondaryLabelColor())
-    my makeLabel("Codex 云中继", 17, 28, 418, 350, 28, true)
-    set statusLabel to my makeLabel("检查中…", 15, 430, 418, 140, 28, true)
-    set detailLabel to my makeLabel("", 13, 28, 330, 544, 80, false)
-    set startButton to my makeButton("启动", "startRelay:", 24, 283, 112)
-    set stopButton to my makeButton("停止", "stopRelay:", 148, 283, 112)
-    my makeButton("刷新状态", "refreshClicked:", 272, 283, 112)
-    set restoreButton to my makeButton("恢复设置", "restoreRelay:", 396, 283, 176)
-    set separator to current application's NSBox's alloc()'s initWithFrame:{{28, 266}, {544, 1}}
+    my makeLabel("Codex 云中继", 17, 28, 608, 350, 28, true)
+    set statusLabel to my makeLabel("检查中…", 15, 430, 608, 140, 28, true)
+    set detailLabel to my makeLabel("", 13, 28, 520, 544, 80, false)
+    set startButton to my makeButton("启动", "startRelay:", 24, 473, 112)
+    set stopButton to my makeButton("停止", "stopRelay:", 148, 473, 112)
+    my makeButton("刷新状态", "refreshClicked:", 272, 473, 112)
+    set restoreButton to my makeButton("恢复设置", "restoreRelay:", 396, 473, 176)
+    set separator to current application's NSBox's alloc()'s initWithFrame:{{28, 456}, {544, 1}}
     separator's setBoxType:(current application's NSBoxSeparator)
     mainWindow's contentView()'s addSubview:separator
+    my makeLabel("本机聊天 HTTPS/SSE", 17, 28, 418, 350, 28, true)
+    set modelStatusLabel to my makeLabel("检查中…", 15, 430, 418, 140, 28, true)
+    set modelDetailLabel to my makeLabel("", 12, 28, 345, 544, 68, false)
+    my makeButton("启用本机优化", "enableModel:", 24, 300, 172)
+    my makeButton("恢复原连接", "restoreModel:", 208, 300, 172)
+    my makeButton("停止本机中继…", "stopModel:", 392, 300, 180)
+    set modelSeparator to current application's NSBox's alloc()'s initWithFrame:{{28, 276}, {544, 1}}
+    modelSeparator's setBoxType:(current application's NSBoxSeparator)
+    mainWindow's contentView()'s addSubview:modelSeparator
     my makeLabel("Antigravity 登录与授权", 17, 28, 228, 540, 28, true)
     set antiLabel to my makeLabel("正在检查安装状态…", 12, 28, 203, 544, 23, false)
     antiLabel's setTextColor:(current application's NSColor's secondaryLabelColor())
@@ -137,7 +149,7 @@ on makeWindow()
     set quitTitle to current application's NSTextField's labelWithString:"退出助手时如何处理中继？"
     quitTitle's setFrame:{{8, 78}, {540, 28}}
     quitPanel's addSubview:quitTitle
-    repeat with buttonInfo in {{"取消", "cancelQuit:", 4}, {"保留后台并退出", "keepAndQuit:", 124}, {"停止并退出", "stopAndQuit:", 336}}
+    repeat with buttonInfo in {{"取消", "cancelQuit:", 4}, {"保留后台并退出", "keepAndQuit:", 124}, {"停止全部并退出", "stopAndQuit:", 336}}
         set quitButton to current application's NSButton's alloc()'s initWithFrame:{{item 3 of buttonInfo, 25}, {200, 34}}
         if item 1 of buttonInfo is "取消" then quitButton's setFrame:{{4, 25}, {108, 34}}
         quitButton's setTitle:(item 1 of buttonInfo)
@@ -148,7 +160,7 @@ on makeWindow()
     end repeat
     mainWindow's contentView()'s addSubview:quitPanel
     quitPanel's setHidden:true
-    set footer to my makeLabel("关闭窗口会保留后台；退出时可选择是否停止中继。", 11, 28, 14, 544, 20, false)
+    set footer to my makeLabel("关闭窗口保留两条中继；选择停止前请先结束聊天。", 11, 28, 14, 544, 20, false)
     footer's setTextColor:(current application's NSColor's secondaryLabelColor())
 end makeWindow
 
@@ -161,6 +173,57 @@ end showReport
 on relayCommand(actionName, stateDir)
     return quoted form of pythonPath & " -B " & quoted form of (resourcesDir & "/relay.py") & " " & actionName & " --state-dir " & quoted form of stateDir
 end relayCommand
+
+on modelCommand(actionName)
+    set applicationPath to current application's NSBundle's mainBundle()'s bundlePath() as text
+    return quoted form of pythonPath & " -I -B " & quoted form of (resourcesDir & "/model_service.py") & " " & quoted form of actionName & " --app " & quoted form of applicationPath
+end modelCommand
+
+on refreshModelState()
+    try
+        set report to do shell script my modelCommand("ui-status")
+        set modelRunning to paragraph 1 of report is "running"
+        modelStatusLabel's setStringValue:(paragraph 2 of report)
+        set oldDelimiters to AppleScript's text item delimiters
+        set AppleScript's text item delimiters to linefeed
+        set modelText to (paragraphs 3 thru -1 of report) as text
+        set AppleScript's text item delimiters to oldDelimiters
+        modelDetailLabel's setStringValue:modelText
+    on error errorText
+        modelStatusLabel's setStringValue:"状态不可用"
+        modelDetailLabel's setStringValue:errorText
+    end try
+end refreshModelState
+
+on changeModel(actionName)
+    if busy then return
+    my beginAction("正在更新本机连接…")
+    try
+        set resultText to do shell script my modelCommand(actionName)
+        my showReport("本机连接", resultText)
+    on error errorText
+        my showReport("本机连接未完成", errorText)
+    end try
+    set busy to false
+    my refreshState()
+end changeModel
+
+on enableModel:sender
+    my changeModel("enable")
+end enableModel:
+
+on restoreModel:sender
+    my changeModel("restore")
+end restoreModel:
+
+on stopModel:sender
+    set alert to current application's NSAlert's alloc()'s init()
+    alert's setMessageText:"恢复配置并停止本机中继？"
+    alert's setInformativeText:"请先结束正在运行的聊天。仍连接本机中继的会话会被中断；重开 Codex 后使用原连接方式。"
+    alert's addButtonWithTitle:"取消"
+    alert's addButtonWithTitle:"恢复并停止"
+    if (alert's runModal() as integer) is 1001 then my changeModel("stop")
+end stopModel:
 
 on refreshState()
     if busy then return
@@ -201,6 +264,7 @@ on refreshState()
         statusLabel's setStringValue:"状态不可用"
         detailLabel's setStringValue:errorText
     end try
+    my refreshModelState()
 end refreshState
 
 on beginAction(messageText)
@@ -301,7 +365,7 @@ on quit
     if allowQuit then continue quit
     if busy then return
     my refreshState()
-    if relayRunning then
+    if relayRunning or modelRunning then
         reportLabel's setHidden:true
         quitPanel's setHidden:false
         mainWindow's makeKeyAndOrderFront:me
@@ -322,6 +386,7 @@ on keepAndQuit:sender
 end keepAndQuit:
 
 on stopAndQuit:sender
+    my changeModel("stop")
     my stopRelay:sender
-    if not relayRunning then my keepAndQuit:sender
+    if not relayRunning and not modelRunning then my keepAndQuit:sender
 end stopAndQuit:
