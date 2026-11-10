@@ -12,3 +12,5 @@ App 中完整保留这份运行环境的解释器、标准库及所附许可证�
 `upstream-licenses/` 同时保留上游其他平台或可选组件的通知，具体组件以随包文件为准。各第三方组件仍受各自的许可证约束；本文件不替代或变更这些许可证。
 
 复现发行构建时，请从上述固定上游版本取得运行环境并核对 SHA-256，同时保留相应版权和许可通知。源码构建默认使用本机 Python，只有传入 `--bundle-python` 时才会把指定运行环境一并复制进 App。
+
+Windows x64 中继包包含 [Python Software Foundation 提供的 CPython 3.14.10 嵌入式运行环境](https://www.python.org/downloads/release/python-31410/)。`windows/build.py` 核对官方 ZIP 的 SHA-256 后打包。解释器、标准库及原有许可证保留在 `python/`，只在 `python314._pth` 中加入上一级目录以载入中继代码。

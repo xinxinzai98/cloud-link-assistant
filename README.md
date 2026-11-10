@@ -2,7 +2,11 @@
 
 <img src="assets/app-icon.png" alt="云连接助手图标" width="96" height="96">
 
-macOS 原生 AppKit 窗口，用现有系统代理连接 Codex 云服务，提供可选的本机 HTTPS/SSE 中继、连接就绪后启动 Codex。使用 AppleScriptObjC 和 Python 标准库，没有新增第三方 Python 依赖。
+使用已有 HTTP 代理连接 Codex 云服务，并提供本机 HTTPS/SSE 中继。macOS 版使用 AppKit 界面管理中继和登录启动。Windows 版提供两个独立的中继进程和命令启动器。
+
+## 下载 Windows x64 中继版
+
+[下载 v1.2.1-windows.1](https://github.com/xinxinzai98/cloud-link-assistant/releases/download/v1.2.1-windows.1/cloud-link-assistant-v1.2.1-windows.1-x64.zip) · [Windows 使用说明](windows/README.md)
 
 ## 下载 macOS App
 

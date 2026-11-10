@@ -4,7 +4,10 @@
 import argparse
 import asyncio
 import contextlib
-import fcntl
+try:
+    import fcntl
+except ImportError:
+    fcntl = None  # Windows uses only the network worker.
 import http.client
 import ipaddress
 import json
