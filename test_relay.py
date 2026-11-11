@@ -25,6 +25,14 @@ spec.loader.exec_module(relay)
 
 
 class HostsTests(unittest.TestCase):
+    def test_automatic_bypass_uses_the_current_network_service(self):
+        settings = mock.Mock()
+        settings.active_network_service.return_value = 'USB Ethernet'
+        with mock.patch.object(relay, 'proxy_config', return_value=settings), \
+                mock.patch.object(relay, 'read_bypass', return_value=['localhost']):
+            self.assertEqual(relay.bypass_plan('auto'),
+                             {'service': 'USB Ethernet', 'before': ['localhost'], 'added': True})
+
     def test_exact_round_trip_without_final_newline(self):
         original = b"127.0.0.1 localhost\n# user note"
         self.assertEqual(relay.remove_mapping(relay.add_mapping(original), original), original)

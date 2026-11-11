@@ -8,7 +8,7 @@ from urllib.request import urlopen
 from zipfile import ZIP_DEFLATED, ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "v1.2.1-windows.1"
+VERSION = "v1.3.0"
 PYTHON_URL = "https://www.python.org/ftp/python/3.14.10/python-3.14.10-embed-amd64.zip"
 PYTHON_SHA256 = "90905e64a840557d8c1bc4f5b74db3d7ee85e3ffb217611cac1c7813acea4159"
 BUNDLE = "cloud-link-assistant-windows"
@@ -22,10 +22,11 @@ def main():
 
     dist = ROOT / "dist"
     dist.mkdir(exist_ok=True)
-    asset = dist / f"cloud-link-assistant-{VERSION}-x64.zip"
-    files = [ROOT / name for name in ("relay.py", "https_compat.py", "windows_bridge.py",
+    asset = dist / f"cloud-link-assistant-{VERSION}-windows-x64.zip"
+    files = [ROOT / name for name in ("relay.py", "https_compat.py", "windows_bridge.py", "proxy_config.py",
                                      "THIRD_PARTY_NOTICES.md")]
-    files.extend(ROOT / "windows" / name for name in ("README.md", "Start-Model.cmd", "Start-Cloud.cmd"))
+    files.extend(ROOT / "windows" / name for name in ("README.md", "Start-Model.cmd", "Start-Cloud.cmd",
+                                                     "Configure-Proxy.cmd", "Check-Connection.cmd"))
     with tempfile.TemporaryDirectory(dir=dist) as directory:
         temporary = Path(directory) / asset.name
         with ZipFile(io.BytesIO(runtime)) as source, ZipFile(temporary, "w", ZIP_DEFLATED) as output:

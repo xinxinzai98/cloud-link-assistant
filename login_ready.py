@@ -16,7 +16,6 @@ import urllib.request
 
 SUPPORT = Path('/Library/Application Support/CloudLinkAssistant')
 CODEX = Path('/Applications/ChatGPT.app')
-CLASH = Path('/Applications/Clash Verge.app')
 MODEL_URL = 'http://127.0.0.1:19847/healthz'
 
 
@@ -26,9 +25,9 @@ def report(event, **values):
 
 
 def load_relay():
-    source = SUPPORT / 'relay.py'
+    source = Path(__file__).with_name('relay.py')
     if not source.is_file():
-        source = Path(__file__).with_name('relay.py')
+        source = SUPPORT / 'relay.py'
     spec = importlib.util.spec_from_file_location('cloudlink_relay', source)
     relay = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(relay)
@@ -56,7 +55,9 @@ def readiness(relay):
         if relay.MAPPING not in relay.HOSTS.read_bytes():
             raise ValueError('cloud mapping pending')
         stage = 'cloud_proxy_exception'
-        service = (state.get('proxy_bypass') or {}).get('service', 'Wi-Fi')
+        service = (state.get('proxy_bypass') or {}).get('service')
+        if not service:
+            raise ValueError('cloud network service pending')
         if relay.TARGET.lower() not in [s.lower() for s in relay.read_bypass(service)]:
             raise ValueError('cloud proxy exception pending')
         stage = 'model_gateway'
@@ -138,8 +139,6 @@ def main():
         readiness(relay)
         report('ready', check_only=True)
         return
-    if CLASH.is_dir():
-        open_if_needed(CLASH, 'io.github.clash-verge-rev.clash-verge-rev')
     if wait_ready(relay, args.timeout) is not None:
         launch_ready_apps(args.helper_app)
 

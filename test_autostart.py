@@ -74,6 +74,8 @@ class AutostartTests(unittest.TestCase):
             resources.mkdir(parents=True)
             for path in [support / 'relay.py', resources / 'relay.py']:
                 path.write_bytes(b'fixed relay fixture')
+            for path in [support / 'proxy_config.py', resources / 'proxy_config.py']:
+                path.write_bytes(b'fixed proxy settings fixture')
             (support / 'autostart.py').write_bytes(b'previous protected installer')
             (support / 'operator.json').write_text(json.dumps(user))
             (support / 'installation.json').write_text(json.dumps({'installed_at': 1}))
@@ -99,6 +101,17 @@ class AutostartTests(unittest.TestCase):
                 self.assertFalse(autostart.agent_path(user).exists())
             self.assertEqual(len(list(support.glob('*.disabled-*'))), 4)
             self.assertEqual((support / 'relay-state/hosts-before-test.bin').read_bytes(), b'original recovery data')
+
+    def test_upgrade_from_old_install_adds_proxy_reader_and_rolls_back_on_failure(self):
+        with self.installed_fixture() as (support, user, app, resources, daemon, relay):
+            (support / 'proxy_config.py').unlink()
+            with mock.patch.object(autostart, 'write_plist', side_effect=RuntimeError('fixture failure')):
+                with self.assertRaisesRegex(RuntimeError, 'fixture failure'):
+                    autostart.reactivate(user, app, resources)
+            self.assertFalse((support / 'proxy_config.py').exists())
+            self.assertEqual((support / 'relay.py').read_bytes(), b'fixed relay fixture')
+            autostart.reactivate(user, app, resources)
+            self.assertEqual((support / 'proxy_config.py').read_bytes(), b'fixed proxy settings fixture')
             self.assertTrue(autostart.old_state(user).is_symlink())
 
     def test_reactivation_rejects_other_user(self):

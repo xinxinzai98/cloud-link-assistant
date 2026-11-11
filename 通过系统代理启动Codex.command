@@ -9,21 +9,11 @@ if [[ ! -d "$app_target" ]]; then
 fi
 
 proxy_snapshot=$(/usr/sbin/scutil --proxy)
-proxy_enabled=$(print -r -- "$proxy_snapshot" | /usr/bin/awk '$1 == "HTTPSEnable" {print $3; exit}')
-proxy_host=$(print -r -- "$proxy_snapshot" | /usr/bin/awk '$1 == "HTTPSProxy" {print $3; exit}')
-proxy_port=$(print -r -- "$proxy_snapshot" | /usr/bin/awk '$1 == "HTTPSPort" {print $3; exit}')
-if [[ "$proxy_enabled" != 1 || "$proxy_host" != (127.0.0.1|localhost|::1) || "$proxy_port" != <-> ]]; then
-    print -u2 '请先开启回环地址上的系统 HTTPS 代理。'
-    exit 1
-fi
-if (( proxy_port < 1 || proxy_port > 65535 )); then
-    print -u2 '系统代理端口无效。'
-    exit 1
-fi
-
-proxy_authority="$proxy_host"
-[[ "$proxy_host" != '::1' ]] || proxy_authority='[::1]'
-proxy_url="http://${proxy_authority}:${proxy_port}"
+script_directory="${0:A:h}"
+task_python="$script_directory/python/bin/python3"
+[[ -x "$task_python" ]] || task_python='/Library/Application Support/CloudLinkAssistant/python/bin/python3'
+[[ -x "$task_python" ]] || task_python=$(command -v python3)
+proxy_url=$("$task_python" -I -B "$script_directory/proxy_config.py" url)
 proxy_bypass="${NO_PROXY:-${no_proxy:-localhost,127.0.0.1,::1,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,100.64.0.0/10,.local}}"
 # Carry over the system exceptions, including the domain mapped to the cloud relay.
 proxy_exceptions=$(print -r -- "$proxy_snapshot" | /usr/bin/awk '

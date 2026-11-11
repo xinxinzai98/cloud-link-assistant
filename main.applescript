@@ -8,6 +8,7 @@ property statusLabel : missing value
 property detailLabel : missing value
 property modelStatusLabel : missing value
 property modelDetailLabel : missing value
+property proxyLabel : missing value
 property startButton : missing value
 property stopButton : missing value
 property restoreButton : missing value
@@ -111,13 +112,17 @@ on makeButton(theText, actionName, x, y, w)
 end makeButton
 
 on makeWindow()
-    set mainWindow to current application's NSWindow's alloc()'s initWithContentRect:{{0, 0}, {600, 610}} styleMask:7 backing:2 defer:false
+    set mainWindow to current application's NSWindow's alloc()'s initWithContentRect:{{0, 0}, {600, 720}} styleMask:7 backing:2 defer:false
     mainWindow's setTitle:"云连接助手"
     mainWindow's setReleasedWhenClosed:false
     mainWindow's |center|()
-    my makeLabel("云连接助手", 25, 28, 550, 540, 34, true)
-    set subtitle to my makeLabel("Codex 云连接、本机 HTTPS/SSE 与就绪启动", 13, 28, 524, 540, 24, false)
+    my makeLabel("云连接助手", 25, 28, 660, 540, 34, true)
+    set subtitle to my makeLabel("Codex 云连接、本机 HTTPS/SSE 与就绪启动", 13, 28, 634, 540, 24, false)
     subtitle's setTextColor:(current application's NSColor's secondaryLabelColor())
+    my makeLabel("当前代理", 15, 28, 604, 540, 24, true)
+    set proxyLabel to my makeLabel("检查中…", 13, 28, 574, 544, 27, false)
+    my makeButton("代理设置…", "proxySettings:", 24, 530, 260)
+    my makeButton("检测连接", "checkConnections:", 308, 530, 264)
     my makeLabel("Codex 云中继", 17, 28, 478, 350, 28, true)
     set statusLabel to my makeLabel("检查中…", 15, 430, 478, 140, 28, true)
     set detailLabel to my makeLabel("", 13, 28, 390, 544, 80, false)
@@ -169,6 +174,65 @@ on modelCommand(actionName)
     set applicationPath to current application's NSBundle's mainBundle()'s bundlePath() as text
     return quoted form of pythonPath & " -I -B " & quoted form of (resourcesDir & "/model_service.py") & " " & quoted form of actionName & " --app " & quoted form of applicationPath
 end modelCommand
+
+on proxyCommand(actionName)
+    return quoted form of pythonPath & " -I -B " & quoted form of (resourcesDir & "/proxy_config.py") & " " & quoted form of actionName
+end proxyCommand
+
+on refreshProxyState()
+    try
+        set infoText to do shell script my proxyCommand("show")
+        if paragraph 1 of infoText is "manual" then
+            set modeText to "手动设置"
+        else
+            set modeText to "自动读取系统"
+        end if
+        proxyLabel's setStringValue:(modeText & " · " & paragraph 2 of infoText)
+    on error errorText
+        proxyLabel's setStringValue:"代理设置不可用，请打开“代理设置”检查。"
+    end try
+end refreshProxyState
+
+on proxySettings:sender
+    if busy then return
+    set busy to true
+    try
+        set addressText to "127.0.0.1:"
+        set selectedMode to "自动读取系统代理"
+        try
+            set infoText to do shell script my proxyCommand("show")
+            if paragraph 1 of infoText is "manual" then set selectedMode to "手动填写 HTTP 代理"
+            if paragraph 2 of infoText starts with "http://" then set addressText to paragraph 2 of infoText
+        end try
+        set choice to choose from list {"自动读取系统代理", "手动填写 HTTP 代理"} default items {selectedMode} with prompt "选择这台电脑的代理入口。手动模式填写代理客户端的 HTTP／混合地址。"
+        if choice is not false then
+            set settingValue to "auto"
+            if item 1 of choice is "手动填写 HTTP 代理" then
+                set answer to display dialog "本机 HTTP／混合代理地址" default answer addressText buttons {"取消", "保存"} default button "保存"
+                set settingValue to text returned of answer
+            end if
+            set resultText to do shell script (my proxyCommand("set") & " " & quoted form of settingValue)
+            my showReport("代理设置", resultText)
+        end if
+    on error errorText number errorNumber
+        if errorNumber is not -128 then my showReport("代理设置未完成", errorText)
+    end try
+    set busy to false
+    my refreshProxyState()
+end proxySettings:
+
+on checkConnections:sender
+    if busy then return
+    my beginAction("正在检测代理和官方入口…")
+    try
+        set resultText to do shell script my proxyCommand("check")
+        my showReport("连接检测", resultText)
+    on error errorText
+        my showReport("连接检测未完成", errorText)
+    end try
+    set busy to false
+    my refreshState()
+end checkConnections:
 
 on refreshModelState()
     try
@@ -254,6 +318,7 @@ on refreshState()
         detailLabel's setStringValue:errorText
     end try
     my refreshModelState()
+    my refreshProxyState()
 end refreshState
 
 on beginAction(messageText)
@@ -277,7 +342,7 @@ on startRelay:sender
         if managedStartup then
             set commandText to "/bin/launchctl kickstart system/local.hive.cloudlinkassistant.autorelay"
         else
-            set commandText to "/usr/bin/env SUDO_UID=" & quoted form of operatorUID & " SUDO_GID=" & quoted form of operatorGID & " " & my relayCommand("restart", preferredState) & " --proxy-bypass-service 'Wi-Fi'"
+            set commandText to "/usr/bin/env SUDO_UID=" & quoted form of operatorUID & " SUDO_GID=" & quoted form of operatorGID & " " & my relayCommand("restart", preferredState) & " --proxy-bypass-service auto"
         end if
         do shell script commandText with administrator privileges
     on error errorText number errorNumber

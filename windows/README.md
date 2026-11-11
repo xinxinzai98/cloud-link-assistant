@@ -1,6 +1,14 @@
 # 云连接助手 Windows x64 中继版
 
-解压 [Windows ZIP](https://github.com/xinxinzai98/cloud-link-assistant/releases/download/v1.2.1-windows.1/cloud-link-assistant-v1.2.1-windows.1-x64.zip)。包内带 Python。启动前请开启能访问 Codex 官方地址的本机 HTTP 代理。两个启动器都使用 `127.0.0.1:7890` 作为代理入口。
+解压 [Releases 中的 Windows ZIP](https://github.com/xinxinzai98/cloud-link-assistant/releases)。包内带 Python。启动前请开启自己的代理客户端。
+
+## 配置代理与检查连接
+
+默认读取 Windows 系统 HTTP／HTTPS 代理。运行 `Configure-Proxy.cmd` 可以输入 `auto` 使用自动模式，也可以填写自己的本机 HTTP／混合地址，例如 `127.0.0.1:10809`。只有 SOCKS5 入口时，请在代理客户端启用 HTTP／混合入口。
+
+设置保存在当前用户的 `%LOCALAPPDATA%\CloudLinkAssistant\proxy-settings.json`。两个启动器及连接检测共用这份设置。修改设置后，本机模型中继的新请求使用新地址，云端中继需要重新启动。
+
+运行 `Check-Connection.cmd`，分别检查代理端口、模型服务和云端服务。它会报告未监听的端口、TLS 证书错误、连接超时和 HTTP 拒绝状态。服务入口返回 `401` 表示已到达登录校验，真实聊天仍使用 Codex 自己的账号。
 
 ## 本机聊天
 
@@ -24,7 +32,7 @@ curl.exe --noproxy "*" --connect-to "codex-cloud-backend.chatgpt.com:443:127.0.0
 
 ## 使用其他代理端口
 
-在解压目录打开 PowerShell，把示例中的 `7890` 换成现有 HTTP 代理端口。
+在解压目录打开 PowerShell，可以临时指定代理端口。下面的参数只对这次进程有效，保存长期设置请使用 `Configure-Proxy.cmd`。
 
 ```powershell
 .\python\python.exe -B .\windows_bridge.py model --port 19847 --proxy-port 7890

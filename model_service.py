@@ -27,7 +27,7 @@ LOGIN = AGENTS / (LOGIN_LABEL + '.plist')
 SYSTEM = Path('/Library/Application Support/CloudLinkAssistant')
 CLOUD_DAEMON = Path('/Library/LaunchDaemons/local.hive.cloudlinkassistant.autorelay.plist')
 URL = 'http://127.0.0.1:19847'
-FILES = ['https_compat.py', 'relay.py', 'login_ready.py', 'model_service.py',
+FILES = ['https_compat.py', 'relay.py', 'proxy_config.py', 'login_ready.py', 'model_service.py',
          '通过系统代理启动Codex.command']
 
 

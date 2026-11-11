@@ -124,7 +124,7 @@ def supervise(relay, uid, stopping):
         try:
             if console_uid() != uid:
                 raise RuntimeError('等待指定用户登录')
-            relay.start('Wi-Fi')
+            relay.start('auto')
             break
         except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as error:
             message = '等待登录或现有系统代理：' + type(error).__name__
@@ -162,12 +162,13 @@ def supervise(relay, uid, stopping):
 
 def run():
     require_root()
-    for name in ['autostart.py', 'relay.py', 'operator.json', 'python/bin/python3']:
+    for name in ['autostart.py', 'relay.py', 'proxy_config.py', 'operator.json', 'python/bin/python3']:
         # The runtime entry point may be an internal relative symlink.
         trusted((SUPPORT / name).resolve())
     user = json.loads((SUPPORT / 'operator.json').read_text())
     if user['uid'] <= 0 or pwd.getpwuid(user['uid']).pw_gid != user['gid']:
         raise RuntimeError('启动用户记录不匹配。')
+    os.environ['SUDO_UID'] = str(user['uid'])
     relay = load_relay(SUPPORT)
     relay.STATE = SUPPORT / 'relay-state'
     stopping = threading.Event()
@@ -220,9 +221,10 @@ def reactivate(user, app, resources):
     relay.STATE = SUPPORT / 'relay-state'
     was_running = relay.control_request('status') is not None
     incoming = {'autostart.py': (SOURCE / 'autostart.py').read_bytes(),
-                'relay.py': (resources / 'relay.py').read_bytes()}
-    previous_code = {name: (SUPPORT / name).read_bytes() for name in incoming}
-    if previous_code['relay.py'] != incoming['relay.py']:
+                'relay.py': (resources / 'relay.py').read_bytes(),
+                'proxy_config.py': (resources / 'proxy_config.py').read_bytes()}
+    previous_code = {name: (SUPPORT / name).read_bytes() if (SUPPORT / name).exists() else None for name in incoming}
+    if any(previous_code[name] != incoming[name] for name in ('relay.py', 'proxy_config.py')):
         phase = (relay.read_state() or {}).get('phase')
         if was_running or phase != 'stopped':
             raise RuntimeError('中继程序需要升级，请先停止现有中继并确认设置恢复，再重新开启自动启动。')
@@ -230,7 +232,8 @@ def reactivate(user, app, resources):
         backup = SUPPORT / ('code-before-upgrade-' + str(time.time_ns()))
         backup.mkdir(mode=0o700)
         for name, code in previous_code.items():
-            relay.atomic_write(backup / name, code)
+            if code is not None:
+                relay.atomic_write(backup / name, code)
     daemon, login = jobs(user, app)
     try:
         for name, code in incoming.items():
@@ -249,9 +252,12 @@ def reactivate(user, app, resources):
             if path.exists():
                 path.rename(SUPPORT / (path.name + '.failed-' + str(time.time_ns())))
         for name, code in previous_code.items():
-            relay.atomic_write(SUPPORT / name, code)
+            if code is None:
+                (SUPPORT / name).unlink(missing_ok=True)
+            else:
+                relay.atomic_write(SUPPORT / name, code)
         if was_running and relay.control_request('status') is None:
-            relay.start('Wi-Fi')
+            relay.start('auto')
         raise
     print('已重新开启开机自动启动，原恢复记录保持完整。')
 
@@ -295,10 +301,12 @@ def install(app):
                         ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
         shutil.copyfile(SOURCE / 'autostart.py', SUPPORT / 'autostart.py')
         shutil.copyfile(resources / 'relay.py', SUPPORT / 'relay.py')
+        shutil.copyfile(resources / 'proxy_config.py', SUPPORT / 'proxy_config.py')
         (SUPPORT / 'operator.json').write_text(json.dumps(user, ensure_ascii=False) + '\n')
         seal_tree(SUPPORT)
         trusted(SUPPORT / 'autostart.py')
         trusted(SUPPORT / 'relay.py')
+        trusted(SUPPORT / 'proxy_config.py')
         subprocess.run([str(SUPPORT / 'python/bin/python3'), '-I', '-B', '-c',
                         'import ssl,asyncio; print("系统副本运行环境检查通过")'], check=True)
         relay = load_relay(SUPPORT)
@@ -337,7 +345,7 @@ def install(app):
                 path.rename(SUPPORT / (path.name + '.failed'))
         if relay and old_was_running:
             with contextlib.suppress(Exception):
-                relay.start('Wi-Fi')
+                relay.start('auto')
         print('安装未完成；已尝试回退状态路径并恢复原中继。系统副本保留供检查。', file=sys.stderr)
         raise
 

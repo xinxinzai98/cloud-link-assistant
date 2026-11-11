@@ -9,6 +9,7 @@ try:
 except ImportError:
     fcntl = None  # Windows uses only the network worker.
 import http.client
+import importlib.util
 import ipaddress
 import json
 import os
@@ -88,14 +89,14 @@ def read_state():
 
 
 def system_proxy():
-    output = subprocess.check_output(["/usr/sbin/scutil", "--proxy"], text=True)
-    values = dict(re.findall(r"^\s*(\w+)\s*:\s*(.*?)\s*$", output, re.M))
-    if values.get("HTTPSEnable") != "1":
-        raise RuntimeError("系统 HTTPS 代理未启用；本工具不回退到直连。")
-    host, port = values.get("HTTPSProxy"), int(values.get("HTTPSPort", "0"))
-    if host not in ("127.0.0.1", "localhost", "::1") or not 1 <= port <= 65535:
-        raise RuntimeError("本工具只复用回环地址上的系统 HTTPS 代理。")
-    return host, port
+    return proxy_config().resolve()
+
+
+def proxy_config():
+    spec = importlib.util.spec_from_file_location('cloudlink_proxy_config', Path(__file__).with_name('proxy_config.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def read_bypass(service):
@@ -117,6 +118,8 @@ def set_bypass(service, domains):
 def bypass_plan(service):
     if not service:
         return None
+    if service == 'auto':
+        service = proxy_config().active_network_service()
     before = read_bypass(service)
     return {"service": service, "before": before, "added": TARGET.lower() not in [x.lower() for x in before]}
 
@@ -535,7 +538,7 @@ def start(proxy_bypass_service=None):
     print(f"已启用：仅 {TARGET}:443 → 系统代理 {proxy[0]}:{proxy[1]}。")
     print("转发进程以普通用户运行；未开启 TUN。请等待桌面端自动重连。")
     if proxy_bypass:
-        print(f"{proxy_bypass_service} 仅为这个云域名添加代理例外，使 HTTPS 和 WebSocket 都进入中继。")
+        print(f"{proxy_bypass['service']} 已为这个云域名添加代理例外，使 HTTPS 和 WebSocket 都进入中继。")
 
 
 def stop():
